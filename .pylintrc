@@ -1,0 +1,66 @@
+[MASTER]
+extension-pkg-allow-list=[]
+load-plugins=
+jobs=4
+
+[MESSAGES CONTROL]
+disable=
+    missing-module-docstring,
+    missing-class-docstring,
+    missing-function-docstring,
+    too-few-public-methods,
+    import-error,
+    redefined-outer-name,
+    broad-except,
+    line-too-long,
+
+[REPORTS]
+output-format=text
+reports=no
+
+[FORMAT]
+max-line-length=88
+single-line-if-stmt=no
+
+[BASIC]
+good-names=
+    i,
+    j,
+    k,
+    ex,
+    Run,
+    _,
+    db,
+    app,
+    id,
+    fk
+
+[TYPECHECK]
+generated-members=request,app,id,created_at,updated_at
+
+[DESIGN]
+max-args=10
+max-locals=20
+max-returns=6
+max-branches=20
+max-statements=50
+max-parents=10
+max-attributes=20
+min-public-methods=1
+
+[IMPORTS]
+known-standard-library=
+    os,sys,json,time,datetime,logging,pathlib,typing,asyncio
+known-third-party=
+    fastapi,uvicorn,sqlalchemy,pydantic,redis
+known-first-party=
+    app,models,schemas,api,database,redis_client
+
+[CLASSES]
+defining-attr-methods=__init__,__new__,setUp,__post_init__
+
+[VARIABLES]
+dummy-variables-rgx=^(_+[0-9]*?$|dummy_|_$)
+
+[LOGGING]
+logging-modules=logging
