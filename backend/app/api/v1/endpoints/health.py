@@ -18,7 +18,7 @@ router = APIRouter()
 
 
 def check_database_health(db: Session) -> bool:
-    """检查数据库连接状态"""
+    """Проверка состояния подключения к базе данных"""
     try:
         # Выполнить простой запрос для проверки подключения к базе данных
         db.execute(text("SELECT 1"))

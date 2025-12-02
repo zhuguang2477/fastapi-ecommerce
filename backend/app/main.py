@@ -1,14 +1,16 @@
+# backend/app/main.py
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.app.core.config import settings
-from backend.app.api.v1.endpoints import health
+from backend.app.api.v1.endpoints import health, auth, profile, shops  # 新增导入
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
-    description="FastAPI Ecommerce Platform",
+    description="FastAPI Ecommerce Platform - Admin Panel",
     version=settings.VERSION,
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
+    openapi_url="/openapi.json"
 )
 
 # CORS middleware
@@ -22,10 +24,22 @@ app.add_middleware(
 
 # Include routers
 app.include_router(health.router, prefix=settings.API_V1_STR, tags=["health"])
+app.include_router(auth.router, prefix=settings.API_V1_STR + "/auth", tags=["auth"])
+app.include_router(profile.router, prefix=settings.API_V1_STR, tags=["profile"])
+app.include_router(shops.router, prefix=settings.API_V1_STR, tags=["shops"])
 
 @app.get("/")
 async def root():
-    return {"message": "Welcome to Ecommerce API"}
+    return {
+        "message": "Welcome to Ecommerce Admin API",
+        "version": settings.VERSION,
+        "docs": "/docs",
+        "endpoints": {
+            "auth": settings.API_V1_STR + "/auth",
+            "profile": settings.API_V1_STR + "/me/profile",
+            "shops": settings.API_V1_STR + "/me/shops"
+        }
+    }
 
 if __name__ == "__main__":
     import uvicorn
