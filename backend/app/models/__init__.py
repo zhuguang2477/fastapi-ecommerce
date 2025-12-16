@@ -1,7 +1,18 @@
-# 导入所有模型，确保SQLAlchemy能够发现它们
-from backend.app.models.user import User
-from backend.app.models.otp import OTP
-from backend.app.models.shop import Shop, ShopMember
+# backend/app/models/__init__.py
+from .user import User
+from .shop import Shop, ShopMember
+from .otp import OTP
+from .category import Category
+from .product import Product, ProductImage
+from .order import Order, OrderItem
+from .customer import Customer
+from .shop_settings import ShopSettings, ShopDesign
+from .analytics import AnalyticsReport, DailyAnalytics, ProductAnalytics, TrafficSource
 
-# 可导出的模型列表
-__all__ = ["User", "OTP", "Shop", "ShopMember"]
+__all__ = [
+    'User', 'Shop', 'ShopMember', 'OTP',
+    'Category', 'Product', 'ProductImage',
+    'Order', 'OrderItem', 'Customer',
+    'ShopSettings', 'ShopDesign',
+    'AnalyticsReport', 'DailyAnalytics', 'ProductAnalytics', 'TrafficSource'
+]

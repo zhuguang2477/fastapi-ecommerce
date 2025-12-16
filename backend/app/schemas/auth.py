@@ -1,30 +1,19 @@
 # backend/app/schemas/auth.py
-from pydantic import BaseModel, EmailStr, ConfigDict
-
+from pydantic import BaseModel, EmailStr, Field
+from typing import Optional
 
 class SendOTPRequest(BaseModel):
-    """Отправить запрос OTP"""
-    email: EmailStr
+    """Запрос на отправку OTP"""
+    email: EmailStr = Field(..., description="Электронная почта пользователя")
     
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "email": "user@example.com"
-            }
-        }
-    )
-
-
 class ConfirmOTPRequest(BaseModel):
-    """Подтвердить запрос OTP"""
-    email: EmailStr
-    otp: str
-    
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "email": "user@example.com",
-                "otp": "123456"
-            }
-        }
-    )
+    """Запрос на подтверждение OTP"""
+    email: EmailStr = Field(..., description="Электронная почта пользователя")
+    otp_code: str = Field(..., min_length=6, max_length=6, description="6-значный проверочный код")
+
+class RegisterRequest(BaseModel):
+    """Запрос на регистрацию"""
+    email: EmailStr = Field(..., description="Электронная почта пользователя")
+    password: str = Field(..., min_length=8, max_length=128, description="Пароль")
+    first_name: Optional[str] = Field(None, max_length=50, description="Имя")
+    last_name: Optional[str] = Field(None, max_length=50, description="Фамилия")

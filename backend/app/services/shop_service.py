@@ -19,14 +19,14 @@ class ShopService:
         Создать новый магазин
         
         Args:
-            db: Сеанс базы данных
-            owner_id: Идентификатор владельца
+            db: Сессия базы данных
+            owner_id: ID владельца
             shop_data: Данные магазина
             
         Returns:
             Shop: Созданный магазин
         """
-        # Проверьте, существует ли название магазина.
+        # Проверить существование магазина с таким названием
         existing_shop = db.query(Shop).filter(
             Shop.name == shop_data.name,
             Shop.owner_id == owner_id
@@ -35,7 +35,7 @@ class ShopService:
         if existing_shop:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Shop with this name already exists"
+                detail="Магазин с таким названием уже существует"
             )
         
         # Создать магазин
@@ -54,39 +54,39 @@ class ShopService:
         owner_member = ShopMember(
             shop_id=shop.id,
             user_id=owner_id,
-            role="owner",
+            role="владелец",
             is_approved=True
         )
         
         db.add(owner_member)
         db.commit()
         
-        logger.info(f"Created shop '{shop.name}' with ID {shop.id}, owner {owner_id}")
+        logger.info(f"Создан магазин '{shop.name}' с ID {shop.id}, владелец {owner_id}")
         return shop
     
     @staticmethod
     def join_shop(db: Session, user_id: int, join_password: str) -> ShopMember:
         """
-        Присоединяйтесь к магазинам
+        Присоединиться к магазину
         
         Args:
-            db: Сеанс базы данных
-            user_id: Идентификатор пользователя
-            join_password: Добавить пароль
+            db: Сессия базы данных
+            user_id: ID пользователя
+            join_password: Пароль для вступления
             
         Returns:
-            ShopMember: Созданные записи членов
+            ShopMember: Созданная запись участника
         """
-        # Искать магазин
+        # Найти магазин
         shop = db.query(Shop).filter(Shop.join_password == join_password).first()
         
         if not shop:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Shop not found with this password"
+                detail="Магазин с таким паролем не найден"
             )
         
-        # Проверьте, является ли он членом
+        # Проверить, является ли пользователь уже участником
         existing_member = db.query(ShopMember).filter(
             ShopMember.shop_id == shop.id,
             ShopMember.user_id == user_id
@@ -95,14 +95,14 @@ class ShopService:
         if existing_member:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="You are already a member of this shop"
+                detail="Вы уже являетесь участником этого магазина"
             )
         
-        # Создание записей членов (в ожидании одобрения)
+        # Создать запись участника (ожидает подтверждения)
         shop_member = ShopMember(
             shop_id=shop.id,
             user_id=user_id,
-            role="viewer",  # Права только для чтения по умолчанию
+            role="наблюдатель",  # Только чтение по умолчанию
             is_approved=False
         )
         
@@ -110,24 +110,24 @@ class ShopService:
         db.commit()
         db.refresh(shop_member)
         
-        logger.info(f"User {user_id} requested to join shop {shop.id}")
+        logger.info(f"Пользователь {user_id} запросил вступление в магазин {shop.id}")
         return shop_member
     
     @staticmethod
     def get_user_shops(db: Session, user_id: int) -> List[Shop]:
         """
-        Получите доступ ко всем магазинам пользователя
+        Получить все доступные пользователю магазины
         """
-        # Купить магазин, принадлежащий пользователю
+        # Получить магазины, которыми владеет пользователь
         owned_shops = db.query(Shop).filter(Shop.owner_id == user_id).all()
         
-        # Приобретение магазинов, в которых пользователи являются членами
+        # Получить магазины, в которых пользователь является участником
         member_shops = db.query(Shop).join(ShopMember).filter(
             ShopMember.user_id == user_id,
             ShopMember.is_approved == True
         ).all()
         
-        # Объединить и сбросить вес
+        # Объединить и удалить дубликаты
         all_shops = owned_shops + member_shops
         seen_ids = set()
         unique_shops = []
@@ -142,15 +142,15 @@ class ShopService:
     @staticmethod
     def get_pending_requests(db: Session, owner_id: int) -> List[ShopMember]:
         """
-        Получение нерассмотренных просьб о присоединении
+        Получить ожидающие запросы на вступление
         """
-        # Получение идентификатора магазина, принадлежащего пользователю
+        # Получить ID магазинов, принадлежащих пользователю
         owned_shop_ids = [shop.id for shop in db.query(Shop.id).filter(Shop.owner_id == owner_id).all()]
         
         if not owned_shop_ids:
             return []
         
-        # Получение необработанных запросов из этих магазинов
+        # Получить ожидающие запросы из этих магазинов
         pending_requests = db.query(ShopMember).filter(
             ShopMember.shop_id.in_(owned_shop_ids),
             ShopMember.is_approved == False
@@ -159,25 +159,25 @@ class ShopService:
         return pending_requests
     
     @staticmethod
-    def approve_request(db: Session, request_id: int, approve: bool, role: str = "viewer") -> ShopMember:
+    def approve_request(db: Session, request_id: int, approve: bool, role: str = "наблюдатель") -> ShopMember:
         """
-        Ратификация или отклонение просьб о присоединении
+        Одобрить или отклонить запрос на вступление
         
         Args:
-            db: Сеанс базы данных
-            request_id: Запрос ID
-            approve: Ратификация
-            role: Распределенные роли
+            db: Сессия базы данных
+            request_id: ID запроса
+            approve: Одобрить
+            role: Назначаемая роль
             
         Returns:
-            ShopMember: Обновленный список участников
+            ShopMember: Обновленная запись участника
         """
         request = db.query(ShopMember).filter(ShopMember.id == request_id).first()
         
         if not request:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Request not found"
+                detail="Запрос не найден"
             )
         
         if approve:
@@ -185,18 +185,18 @@ class ShopService:
             request.role = role
             db.commit()
             db.refresh(request)
-            logger.info(f"Approved request {request_id}, assigned role: {role}")
+            logger.info(f"Одобрен запрос {request_id}, назначена роль: {role}")
         else:
             db.delete(request)
             db.commit()
-            logger.info(f"Rejected request {request_id}")
+            logger.info(f"Отклонен запрос {request_id}")
         
         return request if approve else None
     
     @staticmethod
     def get_shop_members(db: Session, shop_id: int) -> List[ShopMember]:
         """
-        Получить всех членов магазина
+        Получить всех участников магазина
         """
         return db.query(ShopMember).filter(
             ShopMember.shop_id == shop_id,

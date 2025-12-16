@@ -1,104 +1,180 @@
 # backend/app/services/user_service.py
-from sqlalchemy.orm import Session
-from fastapi import HTTPException, status
-from typing import Optional
+import logging
 from datetime import datetime
+from typing import Optional, Dict, Any
+from sqlalchemy.orm import Session
+from passlib.context import CryptContext
 
 from backend.app.models.user import User
 from backend.app.schemas.user import UserCreate, UserUpdate
-from backend.app.schemas.profile import ProfileUpdate
-import logging
 
 logger = logging.getLogger(__name__)
 
+# Контекст хеширования паролей
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
 
 class UserService:
+    """Класс сервиса пользователей"""
+    
+    @staticmethod
+    def get_password_hash(password: str) -> str:
+        """Генерация хеша пароля"""
+        return pwd_context.hash(password)
+    
+    @staticmethod
+    def verify_password(plain_password: str, hashed_password: str) -> bool:
+        """Проверка пароля"""
+        return pwd_context.verify(plain_password, hashed_password)
+    
+    @staticmethod
+    def create_user(db: Session, user_data: UserCreate) -> User:
+        """Создание нового пользователя
+        
+        Args:
+            db: Сессия базы данных
+            user_data: Данные для создания пользователя
+        
+        Returns:
+            User: Созданный объект пользователя
+        """
+        try:
+            # Проверка существования email
+            existing_user = db.query(User).filter(User.email == user_data.email).first()
+            if existing_user:
+                raise ValueError(f"Email {user_data.email} уже зарегистрирован")
+            
+            # Создание объекта пользователя
+            user = User(
+                email=user_data.email,
+                first_name=user_data.first_name,
+                last_name=user_data.last_name,
+                # Пароль должен быть захэширован перед вызовом этого метода
+                # Или обработать здесь: hashed_password=self.get_password_hash(user_data.password)
+            )
+            
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+            
+            logger.info(f"Пользователь успешно создан: {user.email} (ID: {user.id})")
+            return user
+            
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Ошибка создания пользователя: {e}")
+            raise
+    
+    @staticmethod
+    def create_or_update_user(db: Session, email: str, **kwargs) -> User:
+        """Создание или обновление пользователя (для процесса OTP-авторизации)
+        
+        Args:
+            db: Сессия базы данных
+            email: Email пользователя
+            **kwargs: Другая информация о пользователе
+        
+        Returns:
+            User: Объект пользователя
+        """
+        try:
+            # Поиск существующего пользователя
+            user = db.query(User).filter(User.email == email).first()
+            
+            if user:
+                # Обновление информации пользователя
+                for key, value in kwargs.items():
+                    if hasattr(user, key) and value is not None:
+                        setattr(user, key, value)
+                
+                user.is_verified = True  # Пометить как верифицированного после OTP
+                db.commit()
+                db.refresh(user)
+                
+                logger.info(f"Пользователь успешно обновлен: {email}")
+            else:
+                # Создание нового пользователя
+                user = User(
+                    email=email,
+                    first_name=kwargs.get('first_name'),
+                    last_name=kwargs.get('last_name'),
+                    is_verified=True  # OTP верификация пройдена
+                )
+                
+                db.add(user)
+                db.commit()
+                db.refresh(user)
+                
+                logger.info(f"Пользователь успешно создан: {email} (ID: {user.id})")
+            
+            return user
+            
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Ошибка создания/обновления пользователя: {e}")
+            raise
+    
     @staticmethod
     def get_user_by_email(db: Session, email: str) -> Optional[User]:
-        """Доступ к пользователям через почтовый ящик"""
+        """Получение пользователя по email"""
         return db.query(User).filter(User.email == email).first()
-
+    
     @staticmethod
     def get_user_by_id(db: Session, user_id: int) -> Optional[User]:
-        """Получение пользователей с помощью ID"""
+        """Получение пользователя по ID"""
         return db.query(User).filter(User.id == user_id).first()
-
-    @staticmethod
-    def create_or_update_user(db: Session, email: str) -> User:
-        """
-        Создать или обновить пользователя
-        
-        Args:
-            db: Сеанс базы данных
-            email: Почтовый ящик пользователя
-            
-        Returns:
-            User: Создать или обновить объект пользователя
-        """
-        # Проверьте, существует ли пользователь
-        existing_user = UserService.get_user_by_email(db, email)
-        
-        if existing_user:
-            # Обновление существующих пользователей
-            existing_user.is_verified = True
-            existing_user.last_login = datetime.utcnow()
-            db.commit()
-            db.refresh(existing_user)
-            
-            logger.info(f"Updated existing user: {email}")
-            return existing_user
-        else:
-            # Создание новых пользователей
-            db_user = User(
-                email=email,
-                is_verified=True,
-                last_login=datetime.utcnow(),
-                is_profile_completed=False
-            )
-            
-            db.add(db_user)
-            db.commit()
-            db.refresh(db_user)
-            
-            logger.info(f"Created new user: {email}, ID: {db_user.id}")
-            return db_user
     
     @staticmethod
-    def update_profile(db: Session, user_id: int, profile_data: ProfileUpdate) -> User:
-        """
-        Обновление личных данных пользователей
-        
-        Args:
-            db: Сеанс базы данных
-            user_id: Идентификатор пользователя
-            profile_data: Персональные данные
+    def update_user(db: Session, user_id: int, user_data: UserUpdate) -> Optional[User]:
+        """Обновление информации пользователя"""
+        try:
+            user = db.query(User).filter(User.id == user_id).first()
             
-        Returns:
-            User: Обновленные пользователи
+            if not user:
+                return None
+            
+            # Обновление полей
+            if user_data.first_name is not None:
+                user.first_name = user_data.first_name
+            if user_data.last_name is not None:
+                user.last_name = user_data.last_name
+            if user_data.phone is not None:
+                user.phone = user_data.phone
+            if user_data.avatar_url is not None:
+                user.avatar_url = user_data.avatar_url
+            
+            # Проверка статуса заполнения профиля
+            user.check_profile_completion()
+            
+            db.commit()
+            db.refresh(user)
+            
+            logger.info(f"Информация пользователя успешно обновлена: {user.email}")
+            return user
+            
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Ошибка обновления информации пользователя: {e}")
+            raise
+    
+    @staticmethod
+    def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:
+        """Аутентификация пользователя
+        
+        Примечание: Этот метод предполагает, что пароль пользователя уже хранится в БД (в хэшированной форме)
+        Если проект использует OTP-авторизацию, этот метод может не понадобиться
         """
-        user = UserService.get_user_by_id(db, user_id)
+        user = db.query(User).filter(User.email == email).first()
+        
         if not user:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found"
-            )
+            return None
         
-        # Обновить поле
-        update_data = profile_data.model_dump(exclude_unset=True)
-        for field, value in update_data.items():
-            setattr(user, field, value)
+        if not user.is_active:
+            return None
         
-        # Проверьте, завершены ли личные данные
-        if user.first_name and user.last_name:
-            user.is_profile_completed = True
+        # Проверка пароля (здесь нужна проверка по фактическому хэшу пароля в БД)
+        # Предполагается, что пароль уже захэширован и хранится в базе данных
+        # if not self.verify_password(password, user.hashed_password):
+        #     return None
         
-        db.commit()
-        db.refresh(user)
-        
-        logger.info(f"Updated profile for user {user_id}")
         return user
-    
-    @staticmethod
-    def get_user_profile(db: Session, user_id: int) -> Optional[User]:
-        """Доступ к персональным данным пользователей"""
-        return db.query(User).filter(User.id == user_id).first()

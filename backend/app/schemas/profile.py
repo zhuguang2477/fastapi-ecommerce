@@ -1,49 +1,40 @@
 # backend/app/schemas/profile.py
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, Field, validator
 from typing import Optional
 from datetime import datetime
 
-
 class ProfileUpdate(BaseModel):
-    """Обновление личных данных"""
-    first_name: Optional[str] = None
-    last_name: Optional[str] = None
-    phone: Optional[str] = None
+    """Обновление профиля"""
+    first_name: Optional[str] = Field(None, max_length=50, description="Имя")
+    last_name: Optional[str] = Field(None, max_length=50, description="Фамилия")
+    phone: Optional[str] = Field(None, max_length=20, description="Номер телефона")
+    avatar_url: Optional[str] = Field(None, max_length=500, description="URL аватара")
     
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "first_name": "Иван",
-                "last_name": "Иванов",
-                "phone": "+79991234567"
-            }
-        }
-    )
-
+    @validator('first_name', 'last_name')
+    def validate_name(cls, v):
+        """Проверка формата имени"""
+        if v and not v.replace(' ', '').isalpha():
+            raise ValueError('Имя может содержать только буквы и пробелы')
+        return v
+    
+    @validator('phone')
+    def validate_phone(cls, v):
+        """Проверка формата номера телефона"""
+        if v and not v.replace('+', '').replace(' ', '').replace('-', '').isdigit():
+            raise ValueError('Неверный формат номера телефона')
+        return v
 
 class ProfileResponse(BaseModel):
-    """Ответы на личные данные"""
-    id: int
+    """Ответ с данными профиля"""
     email: str
-    first_name: Optional[str]
-    last_name: Optional[str]
-    phone: Optional[str]
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    full_name: Optional[str] = None
+    phone: Optional[str] = None
+    avatar_url: Optional[str] = None
+    is_verified: bool
     is_profile_completed: bool
     created_at: datetime
-    updated_at: datetime
     
-    model_config = ConfigDict(
-        from_attributes=True,
-        json_schema_extra={
-            "example": {
-                "id": 1,
-                "email": "user@example.com",
-                "first_name": "Иван",
-                "last_name": "Иванов",
-                "phone": "+79991234567",
-                "is_profile_completed": True,
-                "created_at": "2024-01-15T10:30:00Z",
-                "updated_at": "2024-01-15T10:30:00Z"
-            }
-        }
-    )
+    class Config:
+        from_attributes = True

@@ -22,7 +22,7 @@ router = APIRouter()
     "/shops",
     response_model=ShopResponse,
     summary="Создать новый магазин",
-    description="Создайте новый магазин, где текущие пользователи станут владельцами"
+    description="Создание нового магазина, текущий пользователь становится владельцем"
 )
 async def create_shop(
     shop_data: ShopCreate,
@@ -31,11 +31,11 @@ async def create_shop(
 ):
     """Создать новый магазин"""
     try:
-        # Убедитесь, что пользователь усовершенствовал свои личные данные
+        # Проверить, заполнил ли пользователь свой профиль
         if not current_user.is_profile_completed:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Сначала уточните свой профиль."
+                detail="Сначала заполните свой профиль."
             )
         
         shop = ShopService.create_shop(db, current_user.id, shop_data)
@@ -44,45 +44,45 @@ async def create_shop(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Ошибка создания магазина: {str(e)}")
+        logger.error(f"Ошибка при создании магазина: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Ошибка создания магазина: {str(e)}"
+            detail=f"Ошибка при создании магазина: {str(e)}"
         )
 
 
 @router.get(
     "/me/shops",
     response_model=List[ShopResponse],
-    summary="Купить мой магазин",
-    description="Получите доступ ко всем магазинам, принадлежащим текущим пользователям или присоединившимся к ним"
+    summary="Получить мои магазины",
+    description="Получить все магазины, которыми владеет или в которых участвует текущий пользователь"
 )
 async def get_my_shops(
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
-    """Получить список магазинов пользователей"""
+    """Получить список магазинов пользователя"""
     shops = ShopService.get_user_shops(db, current_user.id)
     return shops
 
 
 @router.post(
     "/shops/join",
-    summary="Присоединяйтесь к существующим магазинам",
-    description="Присоединяйтесь к существующему магазину через пароль (нужно дождаться одобрения владельца)"
+    summary="Присоединиться к существующему магазину",
+    description="Присоединение к существующему магазину по паролю (требуется одобрение владельца)"
 )
 async def join_shop(
     join_request: ShopJoinRequest,
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
-    """Присоединяйтесь к магазинам"""
+    """Присоединиться к магазину"""
     try:
-        # Убедитесь, что пользователь усовершенствовал свои личные данные
+        # Проверить, заполнил ли пользователь свой профиль
         if not current_user.is_profile_completed:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Сначала уточните свой профиль."
+                detail="Сначала заполните свой профиль."
             )
         
         member = ShopService.join_shop(db, current_user.id, join_request.join_password)
@@ -97,27 +97,27 @@ async def join_shop(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Сбой в магазине: {str(e)}")
+        logger.error(f"Ошибка при присоединении к магазину: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Сбой в магазине: {str(e)}"
+            detail=f"Ошибка при присоединении к магазину: {str(e)}"
         )
 
 
 @router.get(
     "/me/shops/pending-requests",
     response_model=List[ShopMemberResponse],
-    summary="Получение необработанных запросов",
-    description="Получение необработанных запросов на присоединение в магазине, принадлежащем текущему пользователю"
+    summary="Получить ожидающие запросы",
+    description="Получить ожидающие запросы на присоединение к магазинам, принадлежащим текущему пользователю"
 )
 async def get_pending_requests(
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
-    """Получение необработанных запросов"""
+    """Получить ожидающие запросы"""
     requests = ShopService.get_pending_requests(db, current_user.id)
     
-    # Построить данные ответа
+    # Построить данные для ответа
     response_data = []
     for req in requests:
         user = db.query(User).filter(User.id == req.user_id).first()
@@ -125,8 +125,8 @@ async def get_pending_requests(
             "id": req.id,
             "shop_id": req.shop_id,
             "user_id": req.user_id,
-            "user_email": user.email if user else "Unknown",
-            "user_full_name": f"{user.last_name} {user.first_name}" if user and user.first_name and user.last_name else user.email if user else "Unknown",
+            "user_email": user.email if user else "Неизвестно",
+            "user_full_name": f"{user.last_name} {user.first_name}" if user and user.first_name and user.last_name else user.email if user else "Неизвестно",
             "role": req.role,
             "is_approved": req.is_approved,
             "created_at": req.created_at
@@ -137,8 +137,8 @@ async def get_pending_requests(
 
 @router.post(
     "/shops/{shop_id}/approve-request",
-    summary="Удовлетворение просьб о присоединении",
-    description="Одобрение или отклонение заявки пользователя на вступление в магазин"
+    summary="Обработать запрос на присоединение",
+    description="Одобрить или отклонить запрос пользователя на присоединение к магазину"
 )
 async def approve_request(
     shop_id: int,
@@ -148,9 +148,9 @@ async def approve_request(
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
-    """Ратификация или отклонение просьб о присоединении"""
+    """Одобрить или отклонить запрос на присоединение"""
     try:
-        # Проверьте, является ли текущий пользователь владельцем магазина
+        # Проверить, является ли текущий пользователь владельцем магазина
         shop = db.query(Shop).filter(
             Shop.id == shop_id,
             Shop.owner_id == current_user.id
@@ -159,20 +159,20 @@ async def approve_request(
         if not shop:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Вы не являетесь владельцем магазина."
+                detail="Вы не являетесь владельцем этого магазина."
             )
         
         result = ShopService.approve_request(db, request_id, approve, role)
         
         if approve:
             return {
-                "message": "Просьба удовлетворена",
+                "message": "Запрос одобрен",
                 "request_id": request_id,
                 "approved": True
             }
         else:
             return {
-                "message": "Просьба отклонена.",
+                "message": "Запрос отклонен",
                 "request_id": request_id,
                 "approved": False
             }
@@ -180,27 +180,27 @@ async def approve_request(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Ошибка обработки запроса: {str(e)}")
+        logger.error(f"Ошибка при обработке запроса: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Ошибка обработки запроса: {str(e)}"
+            detail=f"Ошибка при обработке запроса: {str(e)}"
         )
 
 
 @router.get(
     "/shops/{shop_id}/members",
     response_model=List[ShopMemberResponse],
-    summary="Приобретение членов магазина",
-    description="Получить список всех членов указанного магазина"
+    summary="Получить участников магазина",
+    description="Получить список всех участников указанного магазина"
 )
 async def get_shop_members(
     shop_id: int,
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
-    """Приобретение членов магазина"""
+    """Получить участников магазина"""
     try:
-        # Проверьте, есть ли у пользователя права на просмотр членов
+        # Проверить, есть ли у пользователя право просматривать участников
         member = db.query(ShopMember).filter(
             ShopMember.shop_id == shop_id,
             ShopMember.user_id == current_user.id,
@@ -210,12 +210,12 @@ async def get_shop_members(
         if not member:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="У вас нет прав на просмотр членов магазина."
+                detail="У вас нет прав для просмотра участников магазина."
             )
         
         members = ShopService.get_shop_members(db, shop_id)
         
-        # Построить данные ответа
+        # Построить данные для ответа
         response_data = []
         for member in members:
             user = db.query(User).filter(User.id == member.user_id).first()
@@ -223,8 +223,8 @@ async def get_shop_members(
                 "id": member.id,
                 "shop_id": member.shop_id,
                 "user_id": member.user_id,
-                "user_email": user.email if user else "Unknown",
-                "user_full_name": f"{user.last_name} {user.first_name}" if user and user.first_name and user.last_name else user.email if user else "Unknown",
+                "user_email": user.email if user else "Неизвестно",
+                "user_full_name": f"{user.last_name} {user.first_name}" if user and user.first_name and user.last_name else user.email if user else "Неизвестно",
                 "role": member.role,
                 "is_approved": member.is_approved,
                 "created_at": member.created_at
@@ -235,8 +235,8 @@ async def get_shop_members(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Сбой с членами магазина: {str(e)}")
+        logger.error(f"Ошибка при получении участников магазина: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Сбой с членами магазина: {str(e)}"
+            detail=f"Ошибка при получении участников магазина: {str(e)}"
         )
