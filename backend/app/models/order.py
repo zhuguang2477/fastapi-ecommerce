@@ -1,4 +1,3 @@
-# backend/app/models/order.py
 """
 订单模型
 """
@@ -12,44 +11,44 @@ from backend.app.database import Base
 
 class OrderStatus(enum.Enum):
     """Перечисление статусов заказа"""
-    PENDING = "pending"           # В ожидании
-    CONFIRMED = "confirmed"       # Подтвержден
-    PROCESSING = "processing"     # В обработке
-    SHIPPED = "shipped"           # Отправлен
-    DELIVERED = "delivered"       # Доставлен
-    CANCELLED = "cancelled"       # Отменен
-    REFUNDED = "refunded"         # Возвращен
-    FAILED = "failed"             # Неудачный
+    PENDING = "pending"   
+    CONFIRMED = "confirmed"     
+    PROCESSING = "processing"    
+    SHIPPED = "shipped"        
+    DELIVERED = "delivered"    
+    CANCELLED = "cancelled"     
+    REFUNDED = "refunded"      
+    FAILED = "failed"         
 
 
 class PaymentStatus(enum.Enum):
     """Перечисление статусов оплаты"""
-    PENDING = "pending"           # Ожидает оплаты
-    AUTHORIZED = "authorized"     # Авторизован
-    PAID = "paid"                 # Оплачен
-    PARTIALLY_PAID = "partially_paid"  # Частично оплачен
-    REFUNDED = "refunded"         # Возвращен
-    VOIDED = "voided"             # Аннулирован
-    FAILED = "failed"             # Ошибка оплаты
+    PENDING = "pending"        
+    AUTHORIZED = "authorized"  
+    PAID = "paid"             
+    PARTIALLY_PAID = "partially_paid" 
+    REFUNDED = "refunded"     
+    VOIDED = "voided"         
+    FAILED = "failed"            
 
 
 class PaymentMethod(enum.Enum):
     """Перечисление способов оплаты"""
-    CASH = "cash"                 # Наличные
-    CARD = "card"                 # Кредитная/дебетовая карта
-    WECHAT_PAY = "wechat_pay"     # WeChat Pay
-    ALIPAY = "alipay"             # Alipay
-    BANK_TRANSFER = "bank_transfer"  # Банковский перевод
-    PAYPAL = "paypal"             # PayPal
-    OTHER = "other"               # Другое
+    CASH = "cash"             
+    CARD = "card"               
+    WECHAT_PAY = "wechat_pay"   
+    ALIPAY = "alipay"        
+    BANK_TRANSFER = "bank_transfer" 
+    PAYPAL = "paypal"        
+    OTHER = "other"            
 
 
 class ShippingMethod(enum.Enum):
     """Перечисление способов доставки"""
-    STANDARD = "standard"         # Стандартная доставка
-    EXPRESS = "express"           # Экспресс-доставка
-    PICKUP = "pickup"             # Самовывоз
-    DIGITAL = "digital"           # Цифровая доставка (виртуальные товары)
+    STANDARD = "standard"     
+    EXPRESS = "express"         
+    PICKUP = "pickup"       
+    DIGITAL = "digital"      
 
 
 class Order(Base):
@@ -59,8 +58,11 @@ class Order(Base):
     id = Column(Integer, primary_key=True, index=True)
     shop_id = Column(Integer, ForeignKey("shops.id"), nullable=False, index=True)
     
+    # 添加 recipient_id 字段，根据迁移文件关联到 recipients 表
+    recipient_id = Column(Integer, ForeignKey("recipients.id"), nullable=True, index=True)
+    
     # Информация о заказе
-    order_number = Column(String(50), unique=True, nullable=False, index=True)  # Номер заказа, например "ORD-20231215-001"
+    order_number = Column(String(50), unique=True, nullable=False, index=True)
     order_date = Column(DateTime(timezone=True), server_default=func.now(), index=True)
     
     # Информация о клиенте
@@ -68,16 +70,8 @@ class Order(Base):
     customer_email = Column(String(255), nullable=False, index=True)
     customer_phone = Column(String(50), nullable=True)
     
-    # Данные клиента (формат JSON, агрегированные данные, чтобы избежать частых запросов)
-    customer_data = Column(JSON, nullable=True, default=dict)  # Пример структуры:
-    # {
-    #   "name": "Иван Иванов",
-    #   "email": "ivan@example.com",
-    #   "phone": "+79001234567",
-    #   "shipping_address": {...},
-    #   "billing_address": {...},
-    #   "notes": "Примечания клиента"
-    # }
+    # Данные клиента (формат JSON, агрегированные данные)
+    customer_data = Column(JSON, nullable=True, default=dict)
     
     # Статусы
     status = Column(Enum(OrderStatus), default=OrderStatus.PENDING, index=True)
@@ -85,19 +79,19 @@ class Order(Base):
     
     # Информация об оплате
     payment_method = Column(Enum(PaymentMethod), nullable=True)
-    payment_reference = Column(String(100), nullable=True, index=True)  # Референтный номер оплаты
+    payment_reference = Column(String(100), nullable=True, index=True)
     payment_date = Column(DateTime(timezone=True), nullable=True)
     
     # Финансовая информация
-    subtotal = Column(Numeric(10, 2), nullable=False, default=0)  # Подытог по товарам
-    tax_amount = Column(Numeric(10, 2), nullable=False, default=0)  # Налоги
-    shipping_amount = Column(Numeric(10, 2), nullable=False, default=0)  # Стоимость доставки
-    discount_amount = Column(Numeric(10, 2), nullable=False, default=0)  # Скидка
-    tip_amount = Column(Numeric(10, 2), nullable=False, default=0)  # Чаевые
-    total_amount = Column(Numeric(10, 2), nullable=False, default=0)  # Итоговая сумма
+    subtotal = Column(Numeric(10, 2), nullable=False, default=0)
+    tax_amount = Column(Numeric(10, 2), nullable=False, default=0)
+    shipping_amount = Column(Numeric(10, 2), nullable=False, default=0)
+    discount_amount = Column(Numeric(10, 2), nullable=False, default=0)
+    tip_amount = Column(Numeric(10, 2), nullable=False, default=0)
+    total_amount = Column(Numeric(10, 2), nullable=False, default=0)
     
     # Валюта
-    currency = Column(String(10), default="CNY")  # Код валюты
+    currency = Column(String(10), default="CNY")
     
     # Информация о доставке
     shipping_method = Column(Enum(ShippingMethod), nullable=True)
@@ -107,25 +101,31 @@ class Order(Base):
     actual_delivery_date = Column(DateTime(timezone=True), nullable=True)
     
     # Адресная информация (формат JSON)
-    shipping_address = Column(JSON, nullable=True)  # Адрес доставки
-    billing_address = Column(JSON, nullable=True)   # Адрес для выставления счета
+    shipping_address = Column(JSON, nullable=True)
+    billing_address = Column(JSON, nullable=True)
     
     # Примечания
-    customer_notes = Column(Text, nullable=True)  # Примечания клиента
-    staff_notes = Column(Text, nullable=True)     # Примечания сотрудников
+    customer_notes = Column(Text, nullable=True)
+    staff_notes = Column(Text, nullable=True)
     
     # Маркетинговая информация
-    marketing_source = Column(String(100), nullable=True)  # Маркетинговый источник
-    referral_code = Column(String(100), nullable=True)     # Реферальный код
-    coupon_code = Column(String(100), nullable=True, index=True)  # Код купона
+    marketing_source = Column(String(100), nullable=True)
+    referral_code = Column(String(100), nullable=True)
+    coupon_code = Column(String(100), nullable=True, index=True)
     
     # Временные метки
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
-    # Связи
-    shop = relationship("Shop", back_populates="orders")
+    # 修复关系定义 - 移除重复的 customer 关系
+    # 只保留一个 customer 关系
     customer = relationship("Customer", back_populates="orders")
+    
+    # 添加 recipient 关系
+    recipient = relationship("Recipient", back_populates="orders")
+    
+    # 其他关系
+    shop = relationship("Shop", back_populates="orders")
     items = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan")
     
     # Индексы
@@ -133,6 +133,7 @@ class Order(Base):
         Index('ix_orders_shop_date', 'shop_id', 'order_date'),
         Index('ix_orders_shop_status', 'shop_id', 'status'),
         Index('ix_orders_customer_shop', 'customer_id', 'shop_id'),
+        Index('ix_orders_recipient_id', 'recipient_id'),
     )
     
     def __repr__(self):
@@ -149,7 +150,9 @@ class Order(Base):
         if self.customer_data and 'name' in self.customer_data:
             return self.customer_data['name']
         elif self.customer:
-            return self.customer.full_name
+            # 假设 Customer 模型有 full_name 属性或类似字段
+            return getattr(self.customer, 'full_name', 
+                          f"{getattr(self.customer, 'first_name', '')} {getattr(self.customer, 'last_name', '')}".strip())
         return self.customer_email
     
     @property
@@ -181,6 +184,7 @@ class Order(Base):
         result = {
             'id': self.id,
             'shop_id': self.shop_id,
+            'recipient_id': self.recipient_id,
             'order_number': self.order_number,
             'order_date': self.order_date.isoformat() if self.order_date else None,
             'customer_id': self.customer_id,
@@ -233,6 +237,13 @@ class Order(Base):
                     }
                     for item in self.items
                 ]
+            
+            if self.recipient:
+                result['recipient'] = self.recipient.to_dict() if hasattr(self.recipient, 'to_dict') else {
+                    'id': self.recipient.id,
+                    'recipient_name': getattr(self.recipient, 'recipient_name', ''),
+                    'recipient_phone': getattr(self.recipient, 'recipient_phone', '')
+                }
         
         return result
 
@@ -250,7 +261,7 @@ class OrderItem(Base):
     product_name = Column(String(200), nullable=False)
     product_sku = Column(String(100), nullable=True)
     variant_name = Column(String(200), nullable=True)
-    variant_attributes = Column(JSON, nullable=True)  # Атрибуты варианта
+    variant_attributes = Column(JSON, nullable=True)
     
     # Цена и количество
     quantity = Column(Integer, nullable=False, default=1)
@@ -263,7 +274,7 @@ class OrderItem(Base):
     # Снимок товара (формат JSON, сохраняет информацию о товаре на момент заказа)
     product_snapshot = Column(JSON, nullable=True)
     
-    # Связи
+    # 修复关系定义
     order = relationship("Order", back_populates="items")
     product = relationship("Product", back_populates="order_items")
     variant = relationship("ProductVariant", back_populates="order_items")

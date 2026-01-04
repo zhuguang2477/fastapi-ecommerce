@@ -27,11 +27,14 @@ class CategoryInDB(CategoryBase):
     shop_id: int
     created_at: datetime
     updated_at: datetime
-    product_count: int = 0  # Количество товаров в данной категории
-    subcategories: List['CategoryInDB'] = []  # Подкатегории
+    product_count: int = 0 
+    subcategories: List['CategoryInDB'] = []
     
     class Config:
         from_attributes = True
+
+# 添加 CategoryResponse 作为 CategoryInDB 的别名
+CategoryResponse = CategoryInDB
 
 class CategoryTree(CategoryInDB):
     """Древовидная структура категорий"""

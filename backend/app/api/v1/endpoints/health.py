@@ -1,4 +1,4 @@
-# backend/app/api/v1/endpoints/health
+# backend/app/api/v1/endpoints/health.py
 from fastapi import APIRouter, Depends
 from sqlalchemy import text
 from datetime import datetime
@@ -39,7 +39,7 @@ def check_redis_health(redis_client: redis.Redis) -> bool:
 
 
 @router.get(
-    "/health",
+    "/",  
     response_model=HealthCheckResponse,
     summary="Применение проверки состояния здоровья",
     description="Проверка состояния подключения приложений, баз данных и Redis"
@@ -71,7 +71,7 @@ async def health_check(
 
 
 @router.get(
-    "/health/database",
+    "/database",
     response_model=DatabaseHealthResponse,
     summary="База данных медицинский осмотр",
     description="Проверьте состояние подключения к базе данных отдельно"
@@ -86,7 +86,7 @@ async def database_health_check(db: Session = Depends(get_db)):
 
 
 @router.get(
-    "/health/redis", 
+    "/redis",  
     response_model=RedisHealthResponse,
     summary="Redis Медицинский осмотр",
     description="Проверьте состояние соединения Redis."

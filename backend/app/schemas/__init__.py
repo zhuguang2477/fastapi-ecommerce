@@ -6,10 +6,13 @@ from backend.app.schemas.user import (
     UserResponse,
     UserUpdate,
     Token,
-    TokenData
+    TokenData,
+    UserProfile,
+    OTPVerificationStatus,
+    UserWithOTPStatus
 )
-from backend.app.schemas.otp import OTPRequest, OTPVerify, TokenResponse
-from backend.app.schemas.auth import SendOTPRequest, ConfirmOTPRequest
+from backend.app.schemas.otp import OTPRequest, OTPVerify, TokenResponse, OTPStatusResponse
+from backend.app.schemas.auth import SendOTPRequest, ConfirmOTPRequest, CompleteProfileRequest, RegisterRequest
 from backend.app.schemas.profile import ProfileUpdate, ProfileResponse
 from backend.app.schemas.shop import ShopCreate, ShopJoinRequest, ShopResponse, ShopMemberResponse
 from backend.app.schemas.dashboard import DashboardStats, CategoryStat, MonthlyRevenue, UserActivity
@@ -19,7 +22,7 @@ from backend.app.schemas.order import (
     PaymentStatus, PaymentMethod, Address, 
     OrderItemCreate, OrderItemInDB,
     OrderFilter, OrderSearch, OrderBulkUpdate,
-    OrderStatusUpdate, OrderExportRequest  # Новый
+    OrderStatusUpdate, OrderExportRequest
 )
 from backend.app.schemas.product import (
     ProductBase, ProductCreate, ProductUpdate, ProductInDB,
@@ -38,52 +41,82 @@ from backend.app.schemas.dashboard import (
     DashboardStats, CategoryStat, MonthlyRevenue, 
     UserActivity, QuickStats, WeeklyActivity
 )
-# Добавить импорт
+# 客户模式
 from backend.app.schemas.customer import (
     CustomerResponse, CustomerDetail, CustomerList,
     CustomerStats, CustomerFilter, CustomerSearch,
-    CustomerStatus, CustomerType
+    CustomerStatus, CustomerType, CustomerBase
 )
-
-from backend.app.schemas.settings import (
+# 店铺设置模式
+from backend.app.schemas.shop_settings import (
     ShopSettingsBase, ShopSettingsCreate, ShopSettingsUpdate, ShopSettingsResponse,
     SocialLinks
 )
-from backend.app.schemas.design import (
+# 店铺设计模式
+from backend.app.schemas.shop_design import (
     ShopDesignBase, ShopDesignCreate, ShopDesignUpdate, ShopDesignResponse,
-    HeroBanner, UploadLogoRequest
+    HeroBanner, UploadLogoRequest, ThemeColor, FontFamily, LayoutStyle
+)
+# 收货人模式
+from backend.app.schemas.recipient import (
+    RecipientBase, RecipientCreate, RecipientUpdate, RecipientInDB, 
+    RecipientResponse, RecipientList
+)
+# 购物车模式
+from backend.app.schemas.basket import (
+    BasketStatus, BasketBase, BasketCreate, BasketUpdate, 
+    BasketItemBase, BasketItemCreate, BasketItemUpdate, 
+    BasketItemResponse, BasketResponse, BasketList
 )
 
 __all__ = [
-    # Существующие схемы
+    # 健康检查
     "HealthCheckResponse",
     "DatabaseHealthResponse", 
     "RedisHealthResponse",
+    
+    # 用户
     "UserBase",
     "UserCreate",
     "UserResponse",
     "UserUpdate",
     "Token",
     "TokenData",
+    "UserProfile",
+    "OTPVerificationStatus",
+    "UserWithOTPStatus",
+    
+    # OTP
     "OTPRequest",
     "OTPVerify",
     "TokenResponse",
+    "OTPStatusResponse",
+    
+    # 认证
     "SendOTPRequest",
     "ConfirmOTPRequest",
+    "CompleteProfileRequest",
+    "RegisterRequest",
+    
+    # 个人资料
     "ProfileUpdate",
     "ProfileResponse",
+    
+    # 店铺
     "ShopCreate",
     "ShopJoinRequest",
     "ShopResponse",
     "ShopMemberResponse",
     
-    # Новые схемы
+    # 仪表板
     "DashboardStats",
     "CategoryStat",
     "MonthlyRevenue",
     "UserActivity",
+    "QuickStats",
+    "WeeklyActivity",
     
-    # Связанные с заказами
+    # 订单
     "OrderCreate",
     "OrderInDB",
     "OrderUpdate",
@@ -96,8 +129,13 @@ __all__ = [
     "Address",
     "OrderItemCreate",
     "OrderItemInDB",
+    "OrderFilter",
+    "OrderSearch",
+    "OrderBulkUpdate",
+    "OrderStatusUpdate",
+    "OrderExportRequest",
     
-    # Связанные с товарами
+    # 产品
     "ProductBase",
     "ProductCreate",
     "ProductUpdate",
@@ -111,7 +149,7 @@ __all__ = [
     "ProductImageCreate",
     "ProductImageInDB",
     
-    # Связанные с категориями
+    # 分类
     "CategoryBase",
     "CategoryCreate",
     "CategoryUpdate",
@@ -119,24 +157,58 @@ __all__ = [
     "CategoryTree",
     "CategoryList",
     
-    # Связанные с загрузкой
+    # 上传
     "UploadResponse",
     "MultipleUploadResponse",
     "ImageUploadRequest",
     "FileUploadConfig",
-
-    "DashboardStats", "CategoryStat", "MonthlyRevenue",
-    "UserActivity", "QuickStats", "WeeklyActivity",
-
-    "OrderFilter", "OrderSearch", "OrderBulkUpdate",
-    "OrderStatusUpdate", "OrderExportRequest",
-
-    "CustomerResponse", "CustomerDetail", "CustomerList",
-    "CustomerStats", "CustomerFilter", "CustomerSearch",
-    "CustomerStatus", "CustomerType",
-
-    "ShopSettingsBase", "ShopSettingsCreate", "ShopSettingsUpdate", "ShopSettingsResponse",
+    
+    # 客户
+    "CustomerBase",
+    "CustomerResponse",
+    "CustomerDetail",
+    "CustomerList",
+    "CustomerStats",
+    "CustomerFilter",
+    "CustomerSearch",
+    "CustomerStatus",
+    "CustomerType",
+    
+    # 店铺设置
+    "ShopSettingsBase",
+    "ShopSettingsCreate",
+    "ShopSettingsUpdate",
+    "ShopSettingsResponse",
     "SocialLinks",
-    "ShopDesignBase", "ShopDesignCreate", "ShopDesignUpdate", "ShopDesignResponse",
-    "HeroBanner", "UploadLogoRequest",
+    
+    # 店铺设计
+    "ShopDesignBase",
+    "ShopDesignCreate",
+    "ShopDesignUpdate",
+    "ShopDesignResponse",
+    "HeroBanner",
+    "UploadLogoRequest",
+    "ThemeColor",
+    "FontFamily",
+    "LayoutStyle",
+    
+    # 收货人
+    "RecipientBase",
+    "RecipientCreate",
+    "RecipientUpdate",
+    "RecipientInDB",
+    "RecipientResponse",
+    "RecipientList",
+    
+    # 购物车
+    "BasketStatus",
+    "BasketBase",
+    "BasketCreate",
+    "BasketUpdate",
+    "BasketItemBase",
+    "BasketItemCreate",
+    "BasketItemUpdate",
+    "BasketItemResponse",
+    "BasketResponse",
+    "BasketList"
 ]

@@ -1,16 +1,13 @@
+# backend/app/api/v1/endpoints/order.py
 """
 订单管理API端点
 """
-# backend/app/api/v1/endpoints/order.py
+# backend/app/api/v1/endpoints/orders.py
 import logging
-import csv
-import json
-from typing import Optional, List
+from typing import Optional
 from datetime import datetime
-from io import StringIO
 from math import ceil
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Path, BackgroundTasks
-from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, desc, asc
 
@@ -19,14 +16,12 @@ from backend.app.core.security import get_current_user
 from backend.app.services.order_service import OrderService
 from backend.app.schemas.order import (
     OrderCreate, OrderInDB, OrderUpdate, OrderList,
-    OrderStatus, OrderStatusUpdate, OrderSearch,
-    OrderBulkUpdate, OrderExportRequest, OrderStats
+    OrderStatusUpdate, OrderSearch,
+    OrderBulkUpdate, OrderExportRequest
 )
 
-logger = logging.getLogger(__name__)
-
 router = APIRouter(prefix="/orders", tags=["orders"])
-
+logger = logging.getLogger(__name__)
 
 def get_order_service(db: Session = Depends(get_db)) -> OrderService:
     """Получить экземпляр сервиса заказов"""
@@ -298,7 +293,7 @@ async def update_order(
 @router.patch("/{order_id}/status", response_model=OrderInDB)
 async def update_order_status(
     shop_id: int = Query(..., description="ID магазина"),
-    order_id: int = Path(..., description="ID заказа"),  # Изменено здесь: Query → Path
+    order_id: int = Path(..., description="ID заказа"),
     status_update: OrderStatusUpdate = None,
     background_tasks: BackgroundTasks = None,
     current_user = Depends(get_current_user),
@@ -434,7 +429,7 @@ async def get_order_stats_summary(
             "30d": 30,
             "90d": 90,
             "1y": 365,
-            "all": 3650  # 10 лет, означает "все"
+            "all": 3650
         }
         
         days = days_map.get(period, 30)

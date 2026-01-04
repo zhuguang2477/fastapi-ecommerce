@@ -1,180 +1,194 @@
 # backend/app/services/user_service.py
+"""
+Сервис пользователей
+"""
 import logging
-from datetime import datetime
 from typing import Optional, Dict, Any
 from sqlalchemy.orm import Session
-from passlib.context import CryptContext
+from sqlalchemy.exc import IntegrityError
+from datetime import datetime
 
 from backend.app.models.user import User
-from backend.app.schemas.user import UserCreate, UserUpdate
+from backend.app.core.security import get_password_hash
 
 logger = logging.getLogger(__name__)
-
-# Контекст хеширования паролей
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 class UserService:
     """Класс сервиса пользователей"""
     
     @staticmethod
-    def get_password_hash(password: str) -> str:
-        """Генерация хеша пароля"""
-        return pwd_context.hash(password)
-    
-    @staticmethod
-    def verify_password(plain_password: str, hashed_password: str) -> bool:
-        """Проверка пароля"""
-        return pwd_context.verify(plain_password, hashed_password)
-    
-    @staticmethod
-    def create_user(db: Session, user_data: UserCreate) -> User:
-        """Создание нового пользователя
-        
-        Args:
-            db: Сессия базы данных
-            user_data: Данные для создания пользователя
-        
-        Returns:
-            User: Созданный объект пользователя
-        """
-        try:
-            # Проверка существования email
-            existing_user = db.query(User).filter(User.email == user_data.email).first()
-            if existing_user:
-                raise ValueError(f"Email {user_data.email} уже зарегистрирован")
-            
-            # Создание объекта пользователя
-            user = User(
-                email=user_data.email,
-                first_name=user_data.first_name,
-                last_name=user_data.last_name,
-                # Пароль должен быть захэширован перед вызовом этого метода
-                # Или обработать здесь: hashed_password=self.get_password_hash(user_data.password)
-            )
-            
-            db.add(user)
-            db.commit()
-            db.refresh(user)
-            
-            logger.info(f"Пользователь успешно создан: {user.email} (ID: {user.id})")
-            return user
-            
-        except Exception as e:
-            db.rollback()
-            logger.error(f"Ошибка создания пользователя: {e}")
-            raise
-    
-    @staticmethod
-    def create_or_update_user(db: Session, email: str, **kwargs) -> User:
-        """Создание или обновление пользователя (для процесса OTP-авторизации)
-        
-        Args:
-            db: Сессия базы данных
-            email: Email пользователя
-            **kwargs: Другая информация о пользователе
-        
-        Returns:
-            User: Объект пользователя
-        """
-        try:
-            # Поиск существующего пользователя
-            user = db.query(User).filter(User.email == email).first()
-            
-            if user:
-                # Обновление информации пользователя
-                for key, value in kwargs.items():
-                    if hasattr(user, key) and value is not None:
-                        setattr(user, key, value)
-                
-                user.is_verified = True  # Пометить как верифицированного после OTP
-                db.commit()
-                db.refresh(user)
-                
-                logger.info(f"Пользователь успешно обновлен: {email}")
-            else:
-                # Создание нового пользователя
-                user = User(
-                    email=email,
-                    first_name=kwargs.get('first_name'),
-                    last_name=kwargs.get('last_name'),
-                    is_verified=True  # OTP верификация пройдена
-                )
-                
-                db.add(user)
-                db.commit()
-                db.refresh(user)
-                
-                logger.info(f"Пользователь успешно создан: {email} (ID: {user.id})")
-            
-            return user
-            
-        except Exception as e:
-            db.rollback()
-            logger.error(f"Ошибка создания/обновления пользователя: {e}")
-            raise
-    
-    @staticmethod
     def get_user_by_email(db: Session, email: str) -> Optional[User]:
-        """Получение пользователя по email"""
-        return db.query(User).filter(User.email == email).first()
+        """Получить пользователя по email"""
+        try:
+            return db.query(User).filter(User.email == email).first()
+        except Exception as e:
+            logger.error(f"Ошибка получения пользователя: {e}")
+            return None
     
     @staticmethod
     def get_user_by_id(db: Session, user_id: int) -> Optional[User]:
-        """Получение пользователя по ID"""
-        return db.query(User).filter(User.id == user_id).first()
+        """Получить пользователя по ID"""
+        try:
+            return db.query(User).filter(User.id == user_id).first()
+        except Exception as e:
+            logger.error(f"Ошибка получения пользователя: {e}")
+            return None
     
     @staticmethod
-    def update_user(db: Session, user_id: int, user_data: UserUpdate) -> Optional[User]:
-        """Обновление информации пользователя"""
+    def create_or_update_user(
+        db: Session,
+        email: str,
+        is_verified: bool = False,
+        otp_enabled: bool = False,
+        otp_verified: bool = False
+    ) -> Optional[User]:
+        """Создать или обновить пользователя"""
         try:
-            user = db.query(User).filter(User.id == user_id).first()
+            # Проверить, существует ли пользователь
+            user = db.query(User).filter(User.email == email).first()
             
-            if not user:
-                return None
-            
-            # Обновление полей
-            if user_data.first_name is not None:
-                user.first_name = user_data.first_name
-            if user_data.last_name is not None:
-                user.last_name = user_data.last_name
-            if user_data.phone is not None:
-                user.phone = user_data.phone
-            if user_data.avatar_url is not None:
-                user.avatar_url = user_data.avatar_url
-            
-            # Проверка статуса заполнения профиля
-            user.check_profile_completion()
+            if user:
+                # Обновить существующего пользователя
+                user.is_verified = is_verified
+                user.otp_enabled = otp_enabled
+                user.otp_verified = otp_verified
+                user.updated_at = datetime.now()
+            else:
+                # Создать нового пользователя
+                user = User(
+                    email=email,
+                    is_verified=is_verified,
+                    otp_enabled=otp_enabled,
+                    otp_verified=otp_verified,
+                    is_active=True
+                )
+                db.add(user)
             
             db.commit()
             db.refresh(user)
             
-            logger.info(f"Информация пользователя успешно обновлена: {user.email}")
+            logger.info(f"Пользователь создан/обновлен успешно: {email}")
+            return user
+            
+        except IntegrityError as e:
+            logger.error(f"Ошибка создания/обновления пользователя (нарушение целостности): {e}")
+            db.rollback()
+            return None
+        except Exception as e:
+            logger.error(f"Ошибка создания/обновления пользователя: {e}")
+            db.rollback()
+            return None
+    
+    @staticmethod
+    def update_otp_status(
+        db: Session,
+        user_id: int,
+        is_verified: bool = None,
+        otp_enabled: bool = None,
+        otp_verified: bool = None
+    ) -> Optional[User]:
+        """Обновить статус OTP пользователя"""
+        try:
+            user = db.query(User).filter(User.id == user_id).first()
+            if not user:
+                logger.warning(f"Пользователь не существует: {user_id}")
+                return None
+            
+            # Обновить поля
+            if is_verified is not None:
+                user.is_verified = is_verified
+            
+            if otp_enabled is not None:
+                user.otp_enabled = otp_enabled
+            
+            if otp_verified is not None:
+                user.otp_verified = otp_verified
+            
+            user.updated_at = datetime.now()
+            db.commit()
+            db.refresh(user)
+            
+            logger.info(f"Статус OTP пользователя обновлен успешно: {user.email}")
             return user
             
         except Exception as e:
+            logger.error(f"Ошибка обновления статуса OTP пользователя: {e}")
             db.rollback()
-            logger.error(f"Ошибка обновления информации пользователя: {e}")
-            raise
+            return None
     
     @staticmethod
-    def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:
-        """Аутентификация пользователя
-        
-        Примечание: Этот метод предполагает, что пароль пользователя уже хранится в БД (в хэшированной форме)
-        Если проект использует OTP-авторизацию, этот метод может не понадобиться
-        """
-        user = db.query(User).filter(User.email == email).first()
-        
-        if not user:
+    def update_user_profile(
+        db: Session,
+        user_id: int,
+        profile_data: Dict[str, Any]
+    ) -> Optional[User]:
+        """Обновить профиль пользователя"""
+        try:
+            user = db.query(User).filter(User.id == user_id).first()
+            if not user:
+                logger.warning(f"Пользователь не существует: {user_id}")
+                return None
+            
+            # Обновить поля
+            for key, value in profile_data.items():
+                if hasattr(user, key):
+                    setattr(user, key, value)
+            
+            # Если указаны имя и фамилия, отметить профиль как завершенный
+            if 'first_name' in profile_data and 'last_name' in profile_data:
+                user.is_profile_completed = True
+            
+            user.updated_at = datetime.now()
+            db.commit()
+            db.refresh(user)
+            
+            logger.info(f"Профиль пользователя обновлен успешно: {user.email}")
+            return user
+            
+        except Exception as e:
+            logger.error(f"Ошибка обновления профиля пользователя: {e}")
+            db.rollback()
             return None
-        
-        if not user.is_active:
-            return None
-        
-        # Проверка пароля (здесь нужна проверка по фактическому хэшу пароля в БД)
-        # Предполагается, что пароль уже захэширован и хранится в базе данных
-        # if not self.verify_password(password, user.hashed_password):
-        #     return None
-        
-        return user
+    
+    @staticmethod
+    def deactivate_user(db: Session, user_id: int) -> bool:
+        """Деактивировать пользователя"""
+        try:
+            user = db.query(User).filter(User.id == user_id).first()
+            if not user:
+                logger.warning(f"Пользователь не существует: {user_id}")
+                return False
+            
+            user.is_active = False
+            user.updated_at = datetime.now()
+            db.commit()
+            
+            logger.info(f"Пользователь деактивирован: {user.email}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Ошибка деактивации пользователя: {e}")
+            db.rollback()
+            return False
+    
+    @staticmethod
+    def activate_user(db: Session, user_id: int) -> bool:
+        """Активировать пользователя"""
+        try:
+            user = db.query(User).filter(User.id == user_id).first()
+            if not user:
+                logger.warning(f"Пользователь не существует: {user_id}")
+                return False
+            
+            user.is_active = True
+            user.updated_at = datetime.now()
+            db.commit()
+            
+            logger.info(f"Пользователь активирован: {user.email}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Ошибка активации пользователя: {e}")
+            db.rollback()
+            return False

@@ -1,27 +1,32 @@
+# backend/app/api/v1/endpoints/__init__.py
 from . import auth
-from . import upload
 from . import shops
-from . import health
-from . import categories
-from . import profile
 from . import products
 from . import orders
-from . import dashboard
+from . import categories
 from . import customers
-from . import settings
+from . import basket
+from . import shop_settings
 from . import design
+from . import recipients
+from . import upload
+from . import profile
+from . import dashboard
+from . import health
 
 __all__ = [
     "auth",
-    "upload", 
-    "shops",
-    "health",
-    "categories",
-    "profile",
+    "shops", 
     "products",
     "orders",
-    "dashboard",
+    "categories",
     "customers",
-    "settings",
+    "basket",
+    "shop_settings",
     "design",
+    "recipients",
+    "upload",
+    "profile",
+    "dashboard",
+    "health"
 ]

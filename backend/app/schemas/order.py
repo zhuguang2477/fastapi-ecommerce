@@ -7,20 +7,20 @@ from enum import Enum
 
 class OrderStatus(str, Enum):
     """Перечисление статусов заказа"""
-    PENDING = "pending"  # Ожидает обработки
-    PAID = "paid"  # Оплачен
-    PROCESSING = "processing"  # Обрабатывается
-    SHIPPED = "shipped"  # Отправлен
-    DELIVERED = "delivered"  # Доставлен
-    CANCELLED = "cancelled"  # Отменен
-    REFUNDED = "refunded"  # Возвращен
+    PENDING = "pending" 
+    PAID = "paid"  
+    PROCESSING = "processing" 
+    SHIPPED = "shipped"
+    DELIVERED = "delivered" 
+    CANCELLED = "cancelled"
+    REFUNDED = "refunded"
 
 class PaymentStatus(str, Enum):
     """Перечисление статусов оплаты"""
-    UNPAID = "unpaid"  # Не оплачен
-    PAID = "paid"  # Оплачен
-    FAILED = "failed"  # Ошибка оплаты
-    REFUNDED = "refunded"  # Возвращен
+    UNPAID = "unpaid"
+    PAID = "paid"
+    FAILED = "failed" 
+    REFUNDED = "refunded" 
 
 class PaymentMethod(str, Enum):
     """Перечисление способов оплаты"""

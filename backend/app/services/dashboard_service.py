@@ -5,17 +5,15 @@
 """
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Tuple, Any  # Добавить импорт Any
+from typing import Dict, List, Optional, Tuple, Any 
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc, extract, and_, case
 from sqlalchemy.sql import label
-
-# Использовать абсолютные импорты во избежание проблем с путями
 from backend.app.models.category import Category
 from backend.app.models.product import Product
 from backend.app.models.order import Order
 from backend.app.models.customer import Customer
-from backend.app.models.shop import Shop  # Добавить импорт Shop
+from backend.app.models.shop import Shop 
 
 from backend.app.core.cache import dashboard_cache
 from backend.app.schemas.dashboard import (
@@ -31,7 +29,7 @@ class DashboardService:
     def __init__(self, db: Session):
         self.db = db
     
-    @dashboard_cache(ttl=300)  # Кэшировать на 5 минут
+    @dashboard_cache(ttl=300)
     async def get_dashboard_stats(self, shop_id: int) -> DashboardStats:
         """
         Получить статистику для панели управления
@@ -167,7 +165,7 @@ class DashboardService:
             # Можно адаптировать под требования: возвращать сумму заказов+клиентов или отображать отдельно
             return UserActivity(
                 week=weeks,
-                visits=order_counts  # Используем количество заказов как показатель "посещений"
+                visits=order_counts
             )
             
         except Exception as e:
@@ -187,8 +185,8 @@ class DashboardService:
                 func.avg(Product.average_rating).label('avg_rating')
             ).filter(
                 Product.shop_id == shop_id,
-                Product.status == 'active',  # Использовать статус 'active'
-                Product.average_rating > 0  # Только товары с рейтингом
+                Product.status == 'active',
+                Product.average_rating > 0
             ).scalar()
             
             return float(avg_rating or 0)
@@ -212,7 +210,7 @@ class DashboardService:
             ).filter(
                 Order.shop_id == shop_id,
                 Order.created_at >= thirty_days_ago,
-                Order.status.in_(['paid', 'delivered'])  # Только оплаченные или доставленные заказы
+                Order.status.in_(['paid', 'delivered'])
             ).first()
             
             if stats and stats.order_count and stats.order_count > 0:
@@ -278,7 +276,7 @@ class DashboardService:
             # Общее количество товаров
             total_products = self.db.query(func.count(Product.id)).filter(
                 Product.shop_id == shop_id,
-                Product.status == 'active'  # Использовать статус 'active'
+                Product.status == 'active'
             ).scalar() or 0
             
             # Общее количество клиентов

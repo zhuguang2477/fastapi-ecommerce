@@ -1,209 +1,393 @@
-# backend/app/services/design.service.py
+# backend/app/services/design_service.py
+"""
+Сервис дизайна магазина
+Обрабатывает бизнес-логику дизайна магазина
+"""
 from sqlalchemy.orm import Session
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 import logging
-import io
+import json
 
-from fastapi import UploadFile
-
-from backend.app.models.shop_settings import ShopDesign
-from backend.app.models.shop import Shop
-from backend.app.models.product import Product
-from backend.app.schemas.design import ShopDesignCreate, ShopDesignUpdate
-from backend.app.services.upload_service import UploadService
+from backend.app.models.shop_design import ShopDesign, HeroBanner
+from backend.app.schemas.shop_design import (
+    ShopDesignCreate, ShopDesignUpdate, ShopDesignResponse,
+    HeroBanner as HeroBannerSchema, UploadLogoRequest,
+    ThemeColor, FontFamily, LayoutStyle
+)
 
 logger = logging.getLogger(__name__)
+
 
 class DesignService:
     """Сервис дизайна магазина"""
     
     def __init__(self, db: Session):
         self.db = db
-        self.upload_service = UploadService()
     
-    def get_design(self, shop_id: int) -> Optional[ShopDesign]:
+    def get_shop_design(self, shop_id: int) -> Optional[ShopDesign]:
         """Получить дизайн магазина"""
-        design = self.db.query(ShopDesign).filter(
-            ShopDesign.shop_id == shop_id
-        ).first()
-        
-        return design
-    
-    def create_or_update_design(self, shop_id: int, design_data: ShopDesignUpdate) -> ShopDesign:
-        """Создать или обновить дизайн магазина"""
         try:
-            # Проверить существование магазина
-            shop = self.db.query(Shop).filter(Shop.id == shop_id).first()
-            if not shop:
-                raise ValueError(f"Магазин не существует: {shop_id}")
+            return self.db.query(ShopDesign)\
+                .filter(ShopDesign.shop_id == shop_id)\
+                .first()
+        except Exception as e:
+            logger.error(f"Ошибка при получении дизайна магазина: {e}")
+            return None
+    
+    def create_shop_design(self, shop_id: int, design_data: ShopDesignCreate) -> Optional[ShopDesign]:
+        """Создать дизайн магазина"""
+        try:
+            # Проверить, существует ли уже дизайн
+            existing_design = self.get_shop_design(shop_id)
+            if existing_design:
+                logger.warning(f"Дизайн магазина уже существует: shop_id={shop_id}")
+                return self.update_shop_design(shop_id, design_data)
             
-            # Найти существующий дизайн
-            design = self.get_design(shop_id)
+            # Подготовить данные
+            design_dict = design_data.dict(exclude={'shop_id', 'hero_banners'})
             
-            if design:
-                # Обновить существующий дизайн
-                update_dict = design_data.dict(exclude_unset=True)
-                
-                # Проверить существование рекомендуемых товаров
-                if 'featured_products' in update_dict:
-                    featured_products = update_dict['featured_products']
-                    if featured_products:
-                        valid_products = self.db.query(Product).filter(
-                            Product.id.in_(featured_products),
-                            Product.shop_id == shop_id
-                        ).all()
-                        
-                        if len(valid_products) != len(featured_products):
-                            invalid_ids = set(featured_products) - {p.id for p in valid_products}
-                            logger.warning(f"Некоторые рекомендуемые товары не существуют: {invalid_ids}")
-                            # Оставить только действительные ID товаров
-                            update_dict['featured_products'] = [p.id for p in valid_products]
-                
-                for key, value in update_dict.items():
-                    setattr(design, key, value)
-                
-                design.updated_at = datetime.utcnow()
-                logger.info(f"Обновлен дизайн магазина: {shop_id}")
-            else:
-                # Создать новый дизайн
-                create_dict = design_data.dict(exclude_unset=True)
-                
-                # Проверить существование рекомендуемых товаров
-                if 'featured_products' in create_dict:
-                    featured_products = create_dict['featured_products']
-                    if featured_products:
-                        valid_products = self.db.query(Product).filter(
-                            Product.id.in_(featured_products),
-                            Product.shop_id == shop_id
-                        ).all()
-                        
-                        if len(valid_products) != len(featured_products):
-                            invalid_ids = set(featured_products) - {p.id for p in valid_products}
-                            logger.warning(f"Некоторые рекомендуемые товары не существуют: {invalid_ids}")
-                            # Оставить только действительные ID товаров
-                            create_dict['featured_products'] = [p.id for p in valid_products]
-                
-                design = ShopDesign(
-                    shop_id=shop_id,
-                    **create_dict
-                )
-                self.db.add(design)
-                logger.info(f"Создан дизайн магазина: {shop_id}")
+            # Создать дизайн
+            design = ShopDesign(
+                shop_id=shop_id,
+                **design_dict
+            )
             
+            # Добавить главные баннеры
+            if design_data.hero_banners:
+                for banner_data in design_data.hero_banners:
+                    banner = HeroBanner(**banner_data.dict())
+                    design.hero_banners.append(banner)
+            
+            self.db.add(design)
             self.db.commit()
             self.db.refresh(design)
             
+            logger.info(f"Дизайн магазина успешно создан: shop_id={shop_id}")
             return design
             
         except Exception as e:
             self.db.rollback()
-            logger.error(f"Ошибка сохранения дизайна магазина: {e}")
-            raise
+            logger.error(f"Ошибка при создании дизайна магазина: {e}")
+            return None
     
-    async def upload_logo(self, shop_id: int, file: UploadFile, image_type: str = "logo") -> Optional[str]:
-        """Загрузить логотип или связанные изображения (асинхронный метод)"""
+    def update_shop_design(self, shop_id: int, update_data: ShopDesignUpdate) -> Optional[ShopDesign]:
+        """Обновить дизайн магазина"""
         try:
-            # Проверить существование магазина
-            shop = self.db.query(Shop).filter(Shop.id == shop_id).first()
-            if not shop:
-                raise ValueError(f"Магазин не существует: {shop_id}")
-            
-            # Загрузить изображение
-            result = await self.upload_service.upload_image(
-                file,
-                folder="shops"
-            )
-            
-            # Обновить соответствующее поле в дизайне магазина
-            design = self.get_design(shop_id)
+            design = self.get_shop_design(shop_id)
             if not design:
-                # Если дизайн не существует, создать дизайн по умолчанию
-                design = ShopDesign(shop_id=shop_id)
-                self.db.add(design)
+                # Если не существует, создать дизайн по умолчанию
+                default_design = ShopDesignCreate(
+                    shop_id=shop_id,
+                    theme_color=ThemeColor.LIGHT,
+                    font_family=FontFamily.DEFAULT,
+                    primary_color="#4F46E5",
+                    secondary_color="#10B981",
+                    background_color="#FFFFFF",
+                    text_color="#1F2937",
+                    layout_style=LayoutStyle.GRID,
+                    hero_banners=[],
+                    logo_url=None,
+                    favicon_url=None
+                )
+                return self.create_shop_design(shop_id, default_design)
             
-            # Обновить соответствующее поле в зависимости от типа изображения
-            update_data = {}
-            if image_type == "logo":
-                update_data["logo_url"] = result.url
-            elif image_type == "favicon":
-                update_data["favicon_url"] = result.url
-            elif image_type == "banner":
-                update_data["banner_url"] = result.url
+            update_dict = update_data.dict(exclude_unset=True, exclude={'hero_banners'})
             
-            # Обновить дизайн
-            design = self.create_or_update_design(
-                shop_id, 
-                ShopDesignUpdate(**update_data)
-            )
+            # Обновить основные поля
+            for field, value in update_dict.items():
+                if hasattr(design, field):
+                    setattr(design, field, value)
             
-            logger.info(f"Загрузка {image_type} успешна: {result.url}")
-            return result.url
+            # Обновить главные баннеры
+            if 'hero_banners' in update_data.dict() and update_data.hero_banners is not None:
+                # Очистить существующие баннеры
+                design.hero_banners.clear()
+                
+                # Добавить новые баннеры
+                for banner_data in update_data.hero_banners:
+                    banner = HeroBanner(**banner_data.dict())
+                    design.hero_banners.append(banner)
             
-        except Exception as e:
-            self.db.rollback()
-            logger.error(f"Ошибка загрузки логотипа: {e}")
-            raise
-    
-    def add_hero_banner(self, shop_id: int, banner_data: Dict[str, Any]) -> bool:
-        """Добавить баннер на главную страницу"""
-        try:
-            design = self.get_design(shop_id)
+            # Обновить конфигурацию дизайна
+            if 'design_config' in update_dict and update_dict['design_config']:
+                if not design.design_config:
+                    design.design_config = {}
+                design.design_config.update(update_dict['design_config'])
             
-            if not design:
-                # Если дизайн не существует, создать дизайн по умолчанию
-                design = ShopDesign(shop_id=shop_id)
-                self.db.add(design)
-                self.db.flush()
-            
-            # Получить существующие баннеры или инициализировать
-            hero_banners = design.hero_banners or []
-            
-            # Добавить новый баннер
-            hero_banners.append(banner_data)
-            
-            # Ограничить количество баннеров (максимум 5)
-            if len(hero_banners) > 5:
-                hero_banners = hero_banners[-5:]
-            
-            design.hero_banners = hero_banners
             design.updated_at = datetime.utcnow()
             
             self.db.commit()
+            self.db.refresh(design)
             
-            logger.info(f"Баннер главной страницы успешно добавлен: {shop_id}")
-            return True
+            logger.info(f"Дизайн магазина успешно обновлен: shop_id={shop_id}")
+            return design
             
         except Exception as e:
             self.db.rollback()
-            logger.error(f"Ошибка добавления баннера главной страницы: {e}")
-            return False
+            logger.error(f"Ошибка при обновлении дизайна магазина: {e}")
+            return None
     
-    def remove_hero_banner(self, shop_id: int, banner_index: int) -> bool:
-        """Удалить баннер с главной страницы"""
+    def update_logo(self, shop_id: int, logo_request: UploadLogoRequest) -> Optional[ShopDesign]:
+        """Обновить логотип магазина"""
         try:
-            design = self.get_design(shop_id)
+            design = self.get_shop_design(shop_id)
+            if not design:
+                return None
             
-            if not design or not design.hero_banners:
-                return False
+            if logo_request.logo_base64:
+                # Здесь можно добавить логику обработки base64 изображения
+                # Например: загрузить в облачное хранилище и получить URL
+                design.logo_url = "generated_url_from_base64"
+            elif logo_request.logo_url:
+                design.logo_url = logo_request.logo_url
             
-            hero_banners = design.hero_banners
-            
-            # Проверить допустимость индекса
-            if banner_index < 0 or banner_index >= len(hero_banners):
-                return False
-            
-            # Удалить указанный баннер
-            hero_banners.pop(banner_index)
-            design.hero_banners = hero_banners
             design.updated_at = datetime.utcnow()
             
             self.db.commit()
+            self.db.refresh(design)
             
-            logger.info(f"Баннер главной страницы успешно удален: {shop_id}, индекс: {banner_index}")
-            return True
+            logger.info(f"Логотип магазина успешно обновлен: shop_id={shop_id}")
+            return design
             
         except Exception as e:
             self.db.rollback()
-            logger.error(f"Ошибка удаления баннера главной страницы: {e}")
-            return False
+            logger.error(f"Ошибка при обновлении логотипа магазина: {e}")
+            return None
+    
+    def update_favicon(self, shop_id: int, favicon_url: str) -> Optional[ShopDesign]:
+        """Обновить иконку сайта"""
+        try:
+            design = self.get_shop_design(shop_id)
+            if not design:
+                return None
+            
+            design.favicon_url = favicon_url
+            design.updated_at = datetime.utcnow()
+            
+            self.db.commit()
+            self.db.refresh(design)
+            
+            logger.info(f"Иконка сайта успешно обновлена: shop_id={shop_id}")
+            return design
+            
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"Ошибка при обновлении иконки сайта: {e}")
+            return None
+    
+    def add_hero_banner(self, shop_id: int, banner_data: Dict[str, Any]) -> Optional[ShopDesign]:
+        """Добавить главный баннер"""
+        try:
+            design = self.get_shop_design(shop_id)
+            if not design:
+                return None
+            
+            # Валидация данных
+            banner_schema = HeroBannerSchema(**banner_data)
+            
+            # Создать баннер
+            banner = HeroBanner(**banner_schema.dict())
+            
+            # Установить порядок
+            if not banner.order:
+                banner.order = len(design.hero_banners) + 1
+            
+            design.hero_banners.append(banner)
+            design.updated_at = datetime.utcnow()
+            
+            self.db.commit()
+            self.db.refresh(design)
+            
+            logger.info(f"Главный баннер успешно добавлен: shop_id={shop_id}, title={banner.title}")
+            return design
+            
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"Ошибка при добавлении главного баннера: {e}")
+            return None
+    
+    def update_hero_banner(self, shop_id: int, banner_index: int, banner_data: Dict[str, Any]) -> Optional[ShopDesign]:
+        """Обновить главный баннер"""
+        try:
+            design = self.get_shop_design(shop_id)
+            if not design or banner_index >= len(design.hero_banners):
+                return None
+            
+            banner = design.hero_banners[banner_index]
+            
+            # Обновить поля
+            for field, value in banner_data.items():
+                if hasattr(banner, field) and value is not None:
+                    setattr(banner, field, value)
+            
+            design.updated_at = datetime.utcnow()
+            
+            self.db.commit()
+            self.db.refresh(design)
+            
+            logger.info(f"Главный баннер успешно обновлен: shop_id={shop_id}, index={banner_index}")
+            return design
+            
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"Ошибка при обновлении главного баннера: {e}")
+            return None
+    
+    def remove_hero_banner(self, shop_id: int, banner_index: int) -> Optional[ShopDesign]:
+        """Удалить главный баннер"""
+        try:
+            design = self.get_shop_design(shop_id)
+            if not design or banner_index >= len(design.hero_banners):
+                return None
+            
+            # Удалить баннер
+            banner = design.hero_banners.pop(banner_index)
+            
+            # Пересортировать оставшиеся баннеры
+            for i, remaining_banner in enumerate(design.hero_banners):
+                remaining_banner.order = i + 1
+            
+            design.updated_at = datetime.utcnow()
+            
+            self.db.commit()
+            self.db.refresh(design)
+            
+            logger.info(f"Главный баннер успешно удален: shop_id={shop_id}, index={banner_index}")
+            return design
+            
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"Ошибка при удалении главного баннера: {e}")
+            return None
+    
+    def reorder_hero_banners(self, shop_id: int, new_order: List[int]) -> Optional[ShopDesign]:
+        """Изменить порядок главных баннеров"""
+        try:
+            design = self.get_shop_design(shop_id)
+            if not design or len(new_order) != len(design.hero_banners):
+                return None
+            
+            # Создать отображение индексов баннеров
+            banners_by_id = {i: banner for i, banner in enumerate(design.hero_banners)}
+            
+            # Изменить порядок
+            design.hero_banners.clear()
+            for new_index in new_order:
+                if new_index in banners_by_id:
+                    banner = banners_by_id[new_index]
+                    banner.order = len(design.hero_banners) + 1
+                    design.hero_banners.append(banner)
+            
+            design.updated_at = datetime.utcnow()
+            
+            self.db.commit()
+            self.db.refresh(design)
+            
+            logger.info(f"Порядок главных баннеров успешно изменен: shop_id={shop_id}")
+            return design
+            
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"Ошибка при изменении порядка главных баннеров: {e}")
+            return None
+    
+    def update_design_config(self, shop_id: int, config_key: str, config_value: Any) -> Optional[ShopDesign]:
+        """Обновить конфигурацию дизайна"""
+        try:
+            design = self.get_shop_design(shop_id)
+            if not design:
+                return None
+            
+            if not design.design_config:
+                design.design_config = {}
+            
+            design.design_config[config_key] = config_value
+            design.updated_at = datetime.utcnow()
+            
+            self.db.commit()
+            self.db.refresh(design)
+            
+            logger.info(f"Конфигурация дизайна успешно обновлена: shop_id={shop_id}, key={config_key}")
+            return design
+            
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"Ошибка при обновлении конфигурации дизайна: {e}")
+            return None
+    
+    def reset_design(self, shop_id: int) -> Optional[ShopDesign]:
+        """Сбросить дизайн магазина к значениям по умолчанию"""
+        try:
+            design = self.get_shop_design(shop_id)
+            if not design:
+                return None
+            
+            # Сбросить к значениям по умолчанию
+            design.theme_color = ThemeColor.LIGHT
+            design.font_family = FontFamily.DEFAULT
+            design.primary_color = "#4F46E5"
+            design.secondary_color = "#10B981"
+            design.background_color = "#FFFFFF"
+            design.text_color = "#1F2937"
+            design.layout_style = LayoutStyle.GRID
+            
+            # Очистить главные баннеры
+            design.hero_banners.clear()
+            
+            # Очистить логотип и иконку сайта
+            design.logo_url = None
+            design.favicon_url = None
+            
+            # Сбросить конфигурацию дизайна
+            design.design_config = {}
+            
+            design.updated_at = datetime.utcnow()
+            
+            self.db.commit()
+            self.db.refresh(design)
+            
+            logger.info(f"Дизайн магазина успешно сброшен: shop_id={shop_id}")
+            return design
+            
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"Ошибка при сбросе дизайна магазина: {e}")
+            return None
+    
+    def to_response(self, design: ShopDesign) -> ShopDesignResponse:
+        """Преобразовать в модель ответа"""
+        if not design:
+            return None
+        
+        # Преобразовать главные баннеры
+        hero_banners = [
+            HeroBannerSchema(
+                title=banner.title,
+                subtitle=banner.subtitle,
+                image_url=banner.image_url,
+                button_text=banner.button_text,
+                button_url=banner.button_url,
+                is_active=banner.is_active,
+                order=banner.order
+            )
+            for banner in design.hero_banners
+        ]
+        
+        return ShopDesignResponse(
+            id=design.id,
+            shop_id=design.shop_id,
+            theme_color=design.theme_color,
+            font_family=design.font_family,
+            primary_color=design.primary_color,
+            secondary_color=design.secondary_color,
+            background_color=design.background_color,
+            text_color=design.text_color,
+            layout_style=design.layout_style,
+            hero_banners=hero_banners,
+            logo_url=design.logo_url,
+            favicon_url=design.favicon_url,
+            design_config=design.design_config or {},
+            created_at=design.created_at,
+            updated_at=design.updated_at
+        )

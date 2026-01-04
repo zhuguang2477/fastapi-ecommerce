@@ -18,9 +18,9 @@ class AnalyticsReport(Base):
     shop_id = Column(Integer, ForeignKey("shops.id"), nullable=False, index=True)
     
     # Информация об отчете
-    report_type = Column(String(50), nullable=False, index=True)  # sales, traffic, customer, product
+    report_type = Column(String(50), nullable=False, index=True)
     report_name = Column(String(200), nullable=True)
-    period_type = Column(String(20), nullable=False)  # daily, weekly, monthly, yearly, custom
+    period_type = Column(String(20), nullable=False)
     
     # Временной диапазон
     period_start = Column(DateTime(timezone=True), nullable=False, index=True)
@@ -30,7 +30,7 @@ class AnalyticsReport(Base):
     report_data = Column(JSON, nullable=False, default=dict)
     
     # Метаданные
-    generated_by = Column(Integer, ForeignKey("users.id"), nullable=True)  # ID создателя
+    generated_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     generation_time = Column(DateTime(timezone=True), server_default=func.now())
     
     # Статус
@@ -73,7 +73,7 @@ class DailyAnalytics(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     shop_id = Column(Integer, ForeignKey("shops.id"), nullable=False, index=True)
-    date = Column(DateTime(timezone=True), nullable=False, index=True)  # Дата (время установлено в 00:00:00)
+    date = Column(DateTime(timezone=True), nullable=False, index=True)
     
     # Данные о продажах
     total_orders = Column(Integer, default=0)
@@ -90,10 +90,10 @@ class DailyAnalytics(Base):
     total_visits = Column(Integer, default=0)
     unique_visitors = Column(Integer, default=0)
     page_views = Column(Integer, default=0)
-    bounce_rate = Column(Numeric(5, 2), default=0)  # Процент
+    bounce_rate = Column(Numeric(5, 2), default=0)
     
     # Данные о конверсии
-    conversion_rate = Column(Numeric(5, 2), default=0)  # Процент
+    conversion_rate = Column(Numeric(5, 2), default=0)
     
     # Популярные товары (формат JSON)
     top_products = Column(JSON, nullable=True)
@@ -164,7 +164,7 @@ class ProductAnalytics(Base):
     wishlist_removes = Column(Integer, default=0)
     
     # Коэффициент конверсии
-    conversion_rate = Column(Numeric(5, 2), default=0)  # Покупки/Просмотры
+    conversion_rate = Column(Numeric(5, 2), default=0)
     
     # Временные метки
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -197,15 +197,15 @@ class TrafficSource(Base):
     date = Column(DateTime(timezone=True), nullable=False, index=True)
     
     # Информация об источнике
-    source_type = Column(String(50), nullable=False, index=True)  # direct, organic, referral, social, email, paid
-    source_name = Column(String(200), nullable=False, index=True)  # google, facebook, wechat, etc.
-    campaign = Column(String(200), nullable=True, index=True)  # Маркетинговая кампания
+    source_type = Column(String(50), nullable=False, index=True)
+    source_name = Column(String(200), nullable=False, index=True)
+    campaign = Column(String(200), nullable=True, index=True)
     
     # Данные о трафике
     visits = Column(Integer, default=0)
     unique_visitors = Column(Integer, default=0)
     page_views = Column(Integer, default=0)
-    avg_session_duration = Column(Integer, default=0)  # Средняя длительность сессии (в секундах)
+    avg_session_duration = Column(Integer, default=0)
     
     # Данные о конверсии
     orders = Column(Integer, default=0)
@@ -214,7 +214,7 @@ class TrafficSource(Base):
     
     # Данные о затратах (платный трафик)
     cost = Column(Numeric(10, 2), default=0)
-    roi = Column(Numeric(5, 2), default=0)  # Возврат инвестиций
+    roi = Column(Numeric(5, 2), default=0)
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

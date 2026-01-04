@@ -6,14 +6,14 @@ from enum import Enum
 
 class CustomerStatus(str, Enum):
     """Перечисление статусов клиентов"""
-    ACTIVE = "active"     # Активный клиент
-    INACTIVE = "inactive" # Неактивный клиент
+    ACTIVE = "active"  
+    INACTIVE = "inactive"
 
 class CustomerType(str, Enum):
     """Перечисление типов клиентов"""
-    NEW = "new"          # Новый клиент
-    REGULAR = "regular"  # Постоянный клиент
-    VIP = "vip"          # VIP клиент
+    NEW = "new"      
+    REGULAR = "regular" 
+    VIP = "vip"        
 
 class CustomerBase(BaseModel):
     """Базовая информация о клиенте"""
@@ -23,6 +23,7 @@ class CustomerBase(BaseModel):
 
 class CustomerResponse(CustomerBase):
     """Ответ с данными клиента"""
+    id: int = Field(..., description="ID клиента")
     order_count: int = Field(0, description="Общее количество заказов")
     total_spent: float = Field(0.0, description="Общая сумма расходов")
     avg_order_value: float = Field(0.0, description="Средняя стоимость заказа")
@@ -32,6 +33,8 @@ class CustomerResponse(CustomerBase):
     type: CustomerType = Field(CustomerType.NEW, description="Тип клиента")
     order_statuses: List[str] = Field(default_factory=list, description="Список статусов заказов")
     order_numbers: List[str] = Field(default_factory=list, description="Список номеров заказов")
+    created_at: datetime = Field(..., description="Дата создания")
+    updated_at: Optional[datetime] = Field(None, description="Дата обновления")
     
     class Config:
         from_attributes = True

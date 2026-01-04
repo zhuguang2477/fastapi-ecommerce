@@ -1,14 +1,20 @@
-# backend/app/services/setting_service.py
+# backend/app/services/shop_settings_service.py
+"""
+Сервис настроек магазина
+Бизнес-логика для обработки настроек магазина
+"""
 from sqlalchemy.orm import Session
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from datetime import datetime
 import logging
 
 from backend.app.models.shop_settings import ShopSettings
-from backend.app.models.shop import Shop
-from backend.app.schemas.settings import ShopSettingsCreate, ShopSettingsUpdate
+from backend.app.schemas.shop_settings import (
+    ShopSettingsCreate, ShopSettingsUpdate, ShopSettingsResponse
+)
 
 logger = logging.getLogger(__name__)
+
 
 class SettingsService:
     """Сервис настроек магазина"""
@@ -16,114 +22,276 @@ class SettingsService:
     def __init__(self, db: Session):
         self.db = db
     
-    def get_settings(self, shop_id: int) -> Optional[ShopSettings]:
+    def get_shop_settings(self, shop_id: int) -> Optional[ShopSettings]:
         """Получить настройки магазина"""
-        settings = self.db.query(ShopSettings).filter(
-            ShopSettings.shop_id == shop_id
-        ).first()
-        
-        return settings
-    
-    def create_or_update_settings(self, shop_id: int, settings_data: ShopSettingsUpdate) -> ShopSettings:
-        """Создать или обновить настройки магазина"""
         try:
-            # Проверить существование магазина
-            shop = self.db.query(Shop).filter(Shop.id == shop_id).first()
-            if not shop:
-                raise ValueError(f"Магазин не существует: {shop_id}")
+            return self.db.query(ShopSettings)\
+                .filter(ShopSettings.shop_id == shop_id)\
+                .first()
+        except Exception as e:
+            logger.error(f"Ошибка при получении настроек магазина: {e}")
+            return None
+    
+    def create_shop_settings(self, shop_id: int, settings_data: ShopSettingsCreate) -> Optional[ShopSettings]:
+        """Создать настройки магазина"""
+        try:
+            # Проверить, существуют ли уже настройки
+            existing_settings = self.get_shop_settings(shop_id)
+            if existing_settings:
+                logger.warning(f"Настройки магазина уже существуют: shop_id={shop_id}")
+                return self.update_shop_settings(shop_id, settings_data)
             
-            # Найти существующие настройки
-            settings = self.get_settings(shop_id)
+            # Создать новые настройки
+            settings = ShopSettings(
+                shop_id=shop_id,
+                **settings_data.dict(exclude={'shop_id'})
+            )
             
-            if settings:
-                # Обновить существующие настройки
-                update_dict = settings_data.dict(exclude_unset=True)
-                
-                for key, value in update_dict.items():
-                    setattr(settings, key, value)
-                
-                settings.updated_at = datetime.utcnow()
-                logger.info(f"Обновление настроек магазина: {shop_id}")
-            else:
-                # Создать новые настройки
-                settings = ShopSettings(
-                    shop_id=shop_id,
-                    **settings_data.dict(exclude_unset=True)
-                )
-                self.db.add(settings)
-                logger.info(f"Создание настроек магазина: {shop_id}")
-            
+            self.db.add(settings)
             self.db.commit()
             self.db.refresh(settings)
             
+            logger.info(f"Настройки магазина успешно созданы: shop_id={shop_id}")
             return settings
             
         except Exception as e:
             self.db.rollback()
-            logger.error(f"Не удалось сохранить настройки магазина: {e}")
-            raise
+            logger.error(f"Ошибка при создании настроек магазина: {e}")
+            return None
+    
+    def update_shop_settings(self, shop_id: int, update_data: ShopSettingsUpdate) -> Optional[ShopSettings]:
+        """Обновить настройки магазина"""
+        try:
+            settings = self.get_shop_settings(shop_id)
+            if not settings:
+                # Если не существует, создать настройки по умолчанию
+                default_settings = ShopSettingsCreate(
+                    shop_id=shop_id,
+                    official_name=None,
+                    contact_email=None,
+                    phone=None,
+                    address=None,
+                    currency="RUB",
+                    timezone="Europe/Moscow",
+                    language="ru_RU",
+                    social_links={}
+                )
+                return self.create_shop_settings(shop_id, default_settings)
+            
+            update_dict = update_data.dict(exclude_unset=True)
+            
+            # Обновить поля
+            for field, value in update_dict.items():
+                if hasattr(settings, field):
+                    setattr(settings, field, value)
+            
+            settings.updated_at = datetime.utcnow()
+            
+            self.db.commit()
+            self.db.refresh(settings)
+            
+            logger.info(f"Настройки магазина успешно обновлены: shop_id={shop_id}")
+            return settings
+            
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"Ошибка при обновлении настроек магазина: {e}")
+            return None
     
     def update_settings_partial(self, shop_id: int, update_data: Dict[str, Any]) -> Optional[ShopSettings]:
         """Частичное обновление настроек магазина"""
         try:
-            settings = self.get_settings(shop_id)
-            
+            settings = self.get_shop_settings(shop_id)
             if not settings:
-                # Если настройки не существуют, создать настройки по умолчанию
-                settings = ShopSettings(shop_id=shop_id)
-                self.db.add(settings)
-                self.db.flush()
+                return None
             
-            # Обновить настройки
-            for key, value in update_data.items():
-                if hasattr(settings, key):
-                    setattr(settings, key, value)
+            # Обновить основные поля
+            for field, value in update_data.items():
+                if hasattr(settings, field) and field not in ['social_links', 'settings']:
+                    setattr(settings, field, value)
+            
+            # Обновить ссылки на социальные сети
+            if 'social_links' in update_data and isinstance(update_data['social_links'], dict):
+                if not settings.social_links:
+                    settings.social_links = {}
+                settings.social_links.update(update_data['social_links'])
+            
+            # Обновить пользовательские настройки
+            if 'settings' in update_data and isinstance(update_data['settings'], dict):
+                if not settings.settings:
+                    settings.settings = {}
+                settings.settings.update(update_data['settings'])
             
             settings.updated_at = datetime.utcnow()
+            
             self.db.commit()
             self.db.refresh(settings)
+            
+            logger.info(f"Настройки магазина успешно частично обновлены: shop_id={shop_id}")
+            return settings
+            
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"Ошибка при частичном обновлении настроек магазина: {e}")
+            return None
+    
+    def update_social_links(self, shop_id: int, social_links: Dict[str, str]) -> Optional[ShopSettings]:
+        """Обновить ссылки на социальные сети"""
+        try:
+            settings = self.get_shop_settings(shop_id)
+            if not settings:
+                return None
+            
+            if not settings.social_links:
+                settings.social_links = {}
+            
+            settings.social_links.update(social_links)
+            settings.updated_at = datetime.utcnow()
+            
+            self.db.commit()
+            self.db.refresh(settings)
+            
+            logger.info(f"Ссылки на социальные сети успешно обновлены: shop_id={shop_id}")
+            return settings
+            
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"Ошибка при обновлении ссылок на социальные сети: {e}")
+            return None
+    
+    def remove_social_link(self, shop_id: int, platform: str) -> Optional[ShopSettings]:
+        """Удалить ссылку на социальную сеть"""
+        try:
+            settings = self.get_shop_settings(shop_id)
+            if not settings or not settings.social_links:
+                return None
+            
+            if platform in settings.social_links:
+                del settings.social_links[platform]
+                settings.updated_at = datetime.utcnow()
+                
+                self.db.commit()
+                self.db.refresh(settings)
+                
+                logger.info(f"Ссылка на социальную сеть успешно удалена: shop_id={shop_id}, platform={platform}")
             
             return settings
             
         except Exception as e:
             self.db.rollback()
-            logger.error(f"Не удалось частично обновить настройки магазина: {e}")
-            raise
+            logger.error(f"Ошибка при удалении ссылки на социальную сеть: {e}")
+            return None
     
-    def reset_settings(self, shop_id: int) -> bool:
+    def update_custom_setting(self, shop_id: int, key: str, value: Any) -> Optional[ShopSettings]:
+        """Обновить пользовательскую настройку"""
+        try:
+            settings = self.get_shop_settings(shop_id)
+            if not settings:
+                return None
+            
+            if not settings.settings:
+                settings.settings = {}
+            
+            settings.settings[key] = value
+            settings.updated_at = datetime.utcnow()
+            
+            self.db.commit()
+            self.db.refresh(settings)
+            
+            logger.info(f"Пользовательская настройка успешно обновлена: shop_id={shop_id}, key={key}")
+            return settings
+            
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"Ошибка при обновлении пользовательской настройки: {e}")
+            return None
+    
+    def remove_custom_setting(self, shop_id: int, key: str) -> Optional[ShopSettings]:
+        """Удалить пользовательскую настройку"""
+        try:
+            settings = self.get_shop_settings(shop_id)
+            if not settings or not settings.settings:
+                return None
+            
+            if key in settings.settings:
+                del settings.settings[key]
+                settings.updated_at = datetime.utcnow()
+                
+                self.db.commit()
+                self.db.refresh(settings)
+                
+                logger.info(f"Пользовательская настройка успешно удалена: shop_id={shop_id}, key={key}")
+            
+            return settings
+            
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"Ошибка при удалении пользовательской настройки: {e}")
+            return None
+    
+    def reset_settings(self, shop_id: int) -> Optional[ShopSettings]:
         """Сбросить настройки магазина к значениям по умолчанию"""
         try:
-            settings = self.get_settings(shop_id)
-            
+            settings = self.get_shop_settings(shop_id)
             if not settings:
-                return True  # Если настроек нет, сброс не требуется
+                return None
             
             # Сбросить к значениям по умолчанию
-            defaults = {
-                'official_name': None,
-                'contact_email': None,
-                'phone': None,
-                'address': None,
-                'currency': 'RUB',  # Изменено с CNY на RUB для российского контекста
-                'timezone': 'Europe/Moscow',  # Изменено с Asia/Shanghai на Europe/Moscow
-                'language': 'ru_RU',  # Изменено с zh_CN на ru_RU
-                'meta_title': None,
-                'meta_description': None,
-                'meta_keywords': None,
+            default_settings = {
+                'currency': 'RUB',
+                'timezone': 'Europe/Moscow',
+                'language': 'ru_RU',
                 'social_links': {},
                 'settings': {}
             }
             
-            for key, value in defaults.items():
-                setattr(settings, key, value)
+            for field, value in default_settings.items():
+                if hasattr(settings, field):
+                    setattr(settings, field, value)
+            
+            # Очистить опциональные поля
+            optional_fields = [
+                'official_name', 'contact_email', 'phone', 'address',
+                'meta_title', 'meta_description', 'meta_keywords'
+            ]
+            
+            for field in optional_fields:
+                if hasattr(settings, field):
+                    setattr(settings, field, None)
             
             settings.updated_at = datetime.utcnow()
-            self.db.commit()
             
-            logger.info(f"Сброс настроек магазина: {shop_id}")
-            return True
+            self.db.commit()
+            self.db.refresh(settings)
+            
+            logger.info(f"Настройки магазина успешно сброшены: shop_id={shop_id}")
+            return settings
             
         except Exception as e:
             self.db.rollback()
-            logger.error(f"Не удалось сбросить настройки магазина: {e}")
-            return False
+            logger.error(f"Ошибка при сбросе настроек магазина: {e}")
+            return None
+    
+    def to_response(self, settings: ShopSettings) -> ShopSettingsResponse:
+        """Преобразовать в модель ответа"""
+        if not settings:
+            return None
+        
+        return ShopSettingsResponse(
+            id=settings.id,
+            shop_id=settings.shop_id,
+            official_name=settings.official_name,
+            contact_email=settings.contact_email,
+            phone=settings.phone,
+            address=settings.address,
+            currency=settings.currency,
+            timezone=settings.timezone,
+            language=settings.language,
+            meta_title=settings.meta_title,
+            meta_description=settings.meta_description,
+            meta_keywords=settings.meta_keywords,
+            social_links=settings.social_links or {},
+            settings=settings.settings or {},
+            created_at=settings.created_at,
+            updated_at=settings.updated_at
+        )

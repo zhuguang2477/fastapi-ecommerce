@@ -1,49 +1,68 @@
-# backend/app/models/user.py
-from sqlalchemy import Column, String, Boolean, Integer, DateTime, Text
+"""
+用户模型
+"""
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text
 from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
+from datetime import datetime
 from backend.app.database import Base
 
+
 class User(Base):
-    """Модель пользователя"""
     __tablename__ = "users"
     
     id = Column(Integer, primary_key=True, index=True)
-    email = Column(String(255), unique=True, index=True, nullable=False)
-    
-    # Личная информация
-    first_name = Column(String(50), nullable=True)  # Имя
-    last_name = Column(String(50), nullable=True)   # Фамилия
+    email = Column(String, unique=True, index=True, nullable=False)
+    first_name = Column(String(100), nullable=True)
+    last_name = Column(String(100), nullable=True)
     phone = Column(String(20), nullable=True)
-    avatar_url = Column(String(500), nullable=True)
     
-    # Статусы
-    is_verified = Column(Boolean, default=False)  # Статус верификации email
+    # 认证状态
+    is_verified = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)
-    is_profile_completed = Column(Boolean, default=False)  # Статус заполнения профиля
+    is_profile_completed = Column(Boolean, default=False)
     
-    # Временные метки
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    # OTP设置
+    otp_enabled = Column(Boolean, default=False)
+    otp_verified = Column(Boolean, default=False)
     
-    # Отношения
-    # Магазины, владельцем которых является пользователь
-    owned_shops = relationship("Shop", back_populates="owner", foreign_keys="Shop.owner_id")
+    # 个人资料
+    avatar_url = Column(String(500), nullable=True)
+    bio = Column(Text, nullable=True)
     
-    # Магазины, в которых пользователь является участником
-    shop_memberships = relationship("ShopMember", back_populates="user")
+    # 时间戳
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+    last_login_at = Column(DateTime, nullable=True)
+
+    # 关系定义
+    owned_shops = relationship(
+        "Shop", 
+        back_populates="owner",
+        foreign_keys="Shop.owner_id",
+        cascade="all, delete-orphan"
+    )
+
+    shop_memberships = relationship(
+        "ShopMember",
+        back_populates="user",
+        foreign_keys="ShopMember.user_id",
+        cascade="all, delete-orphan"
+    )
     
-    # Заказы, созданные пользователем (как клиентом)
-    orders_as_customer = relationship("Order", backref="customer_user", foreign_keys="Order.customer_email", primaryjoin="User.email==Order.customer_email")
-    
-    # OTP коды подтверждения
-    otps = relationship("OTP", back_populates="user", foreign_keys="OTP.email", primaryjoin="User.email==OTP.email")
+    # 添加缺失的关系（与Recipient模型关联）
+    created_recipients = relationship(
+        "Recipient",
+        back_populates="created_by_user",
+        foreign_keys="Recipient.created_by",
+        cascade="all, delete-orphan"
+    )
     
     def __repr__(self):
-        return f"<User(id={self.id}, email='{self.email}')>"
+        return f"<User(id={self.id}, email={self.email})>"
     
     @property
     def full_name(self) -> str:
-        """Получить полное имя пользователя"""
+        """获取用户全名"""
         if self.first_name and self.last_name:
             return f"{self.first_name} {self.last_name}"
         elif self.first_name:
@@ -52,58 +71,9 @@ class User(Base):
             return self.last_name
         else:
             return self.email.split('@')[0]
-    
+        
     @property
-    def display_name(self) -> str:
-        """Получить отображаемое имя (для UI)"""
-        return self.full_name
-    
-    def update_profile(self, first_name: str = None, last_name: str = None, 
-                      phone: str = None, avatar_url: str = None) -> None:
-        """Обновить личную информацию пользователя"""
-        if first_name is not None:
-            self.first_name = first_name
-        if last_name is not None:
-            self.last_name = last_name
-        if phone is not None:
-            self.phone = phone
-        if avatar_url is not None:
-            self.avatar_url = avatar_url
-        
-        # Проверить полноту профиля
-        self.check_profile_completion()
-    
-    def check_profile_completion(self) -> bool:
-        """Проверить полноту личной информации"""
-        # Основная информация: имя и телефон
-        has_basic_info = bool(self.first_name and self.last_name and self.phone)
-        
-        # Обновить статус заполнения
-        self.is_profile_completed = has_basic_info
-        
-        return self.is_profile_completed
-    
-    def to_dict(self) -> dict:
-        """Преобразовать в словарь"""
-        return {
-            'id': self.id,
-            'email': self.email,
-            'first_name': self.first_name,
-            'last_name': self.last_name,
-            'full_name': self.full_name,
-            'phone': self.phone,
-            'avatar_url': self.avatar_url,
-            'is_verified': self.is_verified,
-            'is_active': self.is_active,
-            'is_profile_completed': self.is_profile_completed,
-            'created_at': self.created_at.isoformat() if self.created_at else None
-        }
-    
-    def get_initial(self) -> str:
-        """Получить первую букву имени пользователя (для отображения аватара)"""
-        if self.first_name:
-            return self.first_name[0].upper()
-        elif self.last_name:
-            return self.last_name[0].upper()
-        else:
-            return self.email[0].upper()
+    def all_shops(self):
+        owned = [shop for shop in self.owned_shops]
+        member_shops = [member.shop for member in self.shop_memberships if member.shop]
+        return owned + member_shops

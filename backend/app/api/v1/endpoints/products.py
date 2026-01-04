@@ -1,3 +1,4 @@
+# backend/app/api/v1/endpoints/products.py
 """
 商品管理API端点
 """
@@ -27,11 +28,11 @@ from backend.app.schemas.product import (
     ProductBatchUpdate, ProductExportRequest
 )
 from backend.app.services.category_service import CategoryService
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/products", tags=["products"])
-
 
 def get_product_service(db: Session = Depends(get_db)) -> ProductService:
     """Получить экземпляр сервиса товаров"""
@@ -230,17 +231,32 @@ async def update_product(
 async def update_product_status(
     shop_id: int = Path(..., description="ID магазина"),
     product_id: int = Path(..., description="ID товара"),
-    status: ProductStatus = Query(..., description="Новый статус"),
+    status: str = Query(..., description="Новый статус"),
     reason: Optional[str] = Query(None, description="Причина изменения статуса"),
     current_user = Depends(get_current_user),
     product_service: ProductService = Depends(get_product_service)
 ):
     """
     Обновить статус товара
+    
+    Допустимые статусы: 
+    - draft: Черновик
+    - active: Активен
+    - inactive: Неактивен
+    - archived: Архивный
+    - discontinued: Снят с производства
     """
     try:
         # Проверить права пользователя (требуются права администратора)
         await _validate_shop_admin_access(current_user, shop_id, product_service.db)
+        
+        # Валидация статуса
+        valid_statuses = ["draft", "active", "inactive", "archived", "discontinued"]
+        if status not in valid_statuses:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Неверный статус. Допустимые значения: {', '.join(valid_statuses)}"
+            )
         
         # Обновить статус товара
         success = product_service.update_product_status(
@@ -257,11 +273,66 @@ async def update_product_status(
         
         return {"message": "Статус товара успешно обновлен", "status": status}
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Ошибка при обновлении статуса товара: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Не удалось обновить статус товара"
+        )
+    
+@router.patch("/batch-status")
+async def batch_update_product_status(
+    shop_id: int = Path(..., description="ID магазина"),
+    product_ids: List[int] = Query(..., description="ID товаров"),
+    status: str = Query(..., description="Новый статус"),
+    reason: Optional[str] = Query(None, description="Причина изменения статуса"),
+    current_user = Depends(get_current_user),
+    product_service: ProductService = Depends(get_product_service)
+):
+    """
+    Массовое обновление статуса товаров
+    """
+    try:
+        # Проверить права пользователя (требуются права администратора)
+        await _validate_shop_admin_access(current_user, shop_id, product_service.db)
+        
+        # Валидация статуса
+        valid_statuses = ["draft", "active", "inactive", "archived", "discontinued"]
+        if status not in valid_statuses:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Неверный статус. Допустимые значения: {', '.join(valid_statuses)}"
+            )
+        
+        updated_count = 0
+        errors = []
+        
+        for product_id in product_ids:
+            try:
+                success = product_service.update_product_status(
+                    shop_id, product_id, status, reason
+                )
+                if success:
+                    updated_count += 1
+                else:
+                    errors.append(f"Товар {product_id} не найден")
+            except Exception as e:
+                errors.append(f"Ошибка обновления товара {product_id}: {str(e)}")
+        
+        return {
+            "message": f"Статус обновлен для {updated_count} товаров",
+            "updated_count": updated_count,
+            "total_requested": len(product_ids),
+            "errors": errors if errors else None
+        }
+        
+    except Exception as e:
+        logger.error(f"Ошибка при массовом обновлении статуса товаров: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Не удалось обновить статус товаров"
         )
 
 

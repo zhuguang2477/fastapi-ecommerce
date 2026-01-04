@@ -12,14 +12,14 @@ class CategoryStat(BaseModel):
 
 class WeeklyActivity(BaseModel):
     """Данные еженедельной активности"""
-    week: str  # Дата начала недели, формат: YYYY-MM-DD
+    week: str 
     orders: int
     customers: int
 
 
 class MonthlyRevenue(BaseModel):
     """Ежемесячная выручка"""
-    month: str  # Месяц, формат: YYYY-MM
+    month: str 
     revenue: float
     order_count: Optional[int] = 0
 
@@ -27,7 +27,7 @@ class MonthlyRevenue(BaseModel):
 class UserActivity(BaseModel):
     """Активность пользователей"""
     week: List[str]
-    visits: List[int]  # Можно использовать количество заказов или посещений
+    visits: List[int] 
 
 
 class DashboardStats(BaseModel):

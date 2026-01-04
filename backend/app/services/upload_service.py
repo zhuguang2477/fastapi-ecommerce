@@ -54,9 +54,9 @@ class UploadService:
         """Валидация изображения"""
         # Проверка размера файла
         max_size = settings.MAX_UPLOAD_SIZE if hasattr(settings, 'MAX_UPLOAD_SIZE') else 10 * 1024 * 1024
-        file.file.seek(0, 2)  # Переместиться в конец файла
+        file.file.seek(0, 2)
         file_size = file.file.tell()
-        file.file.seek(0)  # Сбросить указатель файла
+        file.file.seek(0)
         
         if file_size > max_size:
             return False, f"Размер файла превышает лимит ({file_size} > {max_size})"

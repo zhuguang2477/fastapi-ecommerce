@@ -2,21 +2,20 @@
 """
 产品模型
 """
-from sqlalchemy import Column, String, Integer, DateTime, Boolean, ForeignKey, Text, Numeric, JSON, Enum, Index
+from sqlalchemy import Column, String, Integer, DateTime, Boolean, ForeignKey, Text, Numeric, JSON, Enum as SQLAlchemyEnum, Index
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-import enum
+from enum import Enum as PyEnum
 
 from backend.app.database import Base
 
 
-class ProductStatus(enum.Enum):
-    """Перечисление статусов товара"""
-    DRAFT = "draft"           # Черновик
-    PUBLISHED = "published"   # Опубликован
-    ARCHIVED = "archived"     # Архивирован
-    OUT_OF_STOCK = "out_of_stock"  # Нет в наличии
-    DISCONTINUED = "discontinued"  # Снят с продажи
+class ProductStatus(PyEnum):
+    """产品状态枚举"""
+    IN_STOCK = "в наличии"
+    COMING_SOON = "скоро поступит"
+    DISCONTINUED = "снят с продажи"
+    PENDING = "уточняется"
 
 
 class Product(Base):
@@ -30,37 +29,37 @@ class Product(Base):
     # Основная информация
     name = Column(String(200), nullable=False, index=True)
     slug = Column(String(200), nullable=False, unique=True, index=True)
-    sku = Column(String(100), nullable=True, index=True)  # Единица складского учета
-    barcode = Column(String(100), nullable=True, index=True)  # Штрих-код
+    sku = Column(String(100), nullable=True, index=True)
+    barcode = Column(String(100), nullable=True, index=True) 
     
     # Описательная информация
     short_description = Column(String(500), nullable=True)
     description = Column(Text, nullable=True)
     
     # Ценовая информация
-    price = Column(Numeric(10, 2), nullable=False)  # Оригинальная цена
-    sale_price = Column(Numeric(10, 2), nullable=True)  # Цена со скидкой
-    cost_price = Column(Numeric(10, 2), nullable=True)  # Себестоимость
-    compare_at_price = Column(Numeric(10, 2), nullable=True)  # Цена для сравнения
+    price = Column(Numeric(10, 2), nullable=False) 
+    sale_price = Column(Numeric(10, 2), nullable=True) 
+    cost_price = Column(Numeric(10, 2), nullable=True)
+    compare_at_price = Column(Numeric(10, 2), nullable=True)
     
     # Информация о запасах
     stock_quantity = Column(Integer, default=0)
-    low_stock_threshold = Column(Integer, default=5)  # Порог низкого запаса
-    manage_stock = Column(Boolean, default=True)  # Управлять ли запасами
-    allow_backorders = Column(Boolean, default=False)  # Разрешить предзаказ при отсутствии
+    low_stock_threshold = Column(Integer, default=5)
+    manage_stock = Column(Boolean, default=True) 
+    allow_backorders = Column(Boolean, default=False) 
     
     # Статусы
-    status = Column(Enum(ProductStatus), default=ProductStatus.DRAFT, index=True)
+    status = Column(SQLAlchemyEnum(ProductStatus), nullable=True, default=ProductStatus.PENDING)
     is_featured = Column(Boolean, default=False, index=True)
-    is_virtual = Column(Boolean, default=False)  # Является ли виртуальным товаром
-    requires_shipping = Column(Boolean, default=True)  # Требуется ли доставка
+    is_virtual = Column(Boolean, default=False) 
+    requires_shipping = Column(Boolean, default=True) 
     
     # Категории и теги
-    tags = Column(JSON, nullable=True)  # Массив тегов, например ["Новинка", "Хит продаж", "Лимитированный"]
-    attributes = Column(JSON, nullable=True)  # JSON атрибутов, например {"Цвет": "Красный", "Размер": "M"}
+    tags = Column(JSON, nullable=True) 
+    attributes = Column(JSON, nullable=True) 
     
     # Вес и размеры (для расчета доставки)
-    weight = Column(Numeric(10, 2), nullable=True)  # Вес (кг)
+    weight = Column(Numeric(10, 2), nullable=True)
     weight_unit = Column(String(10), default="kg")
     length = Column(Numeric(10, 2), nullable=True)
     width = Column(Numeric(10, 2), nullable=True)
@@ -76,7 +75,7 @@ class Product(Base):
     view_count = Column(Integer, default=0)
     order_count = Column(Integer, default=0)
     wishlist_count = Column(Integer, default=0)
-    average_rating = Column(Numeric(3, 2), default=0)  # Средний рейтинг (0-5)
+    average_rating = Column(Numeric(3, 2), default=0) 
     review_count = Column(Integer, default=0)
     
     # Временная информация
@@ -89,6 +88,7 @@ class Product(Base):
     category = relationship("Category", back_populates="products")
     images = relationship("ProductImage", back_populates="product", cascade="all, delete-orphan")
     order_items = relationship("OrderItem", back_populates="product")
+    basket_items = relationship("BasketItem", back_populates="product", cascade="all, delete-orphan")
     
     # Индексы
     __table_args__ = (
@@ -96,7 +96,7 @@ class Product(Base):
         Index('ix_products_price_range', 'shop_id', 'price', 'sale_price'),
         Index('ix_products_stock_status', 'shop_id', 'stock_quantity', 'status'),
     )
-    
+
     def __repr__(self):
         return f"<Product(id={self.id}, name='{self.name}', shop_id={self.shop_id})>"
     
@@ -164,7 +164,7 @@ class Product(Base):
             'low_stock_threshold': self.low_stock_threshold,
             'manage_stock': self.manage_stock,
             'allow_backorders': self.allow_backorders,
-            'status': self.status.value,
+            'status': self.status.value if self.status else None,
             'is_featured': self.is_featured,
             'is_virtual': self.is_virtual,
             'requires_shipping': self.requires_shipping,
@@ -226,18 +226,18 @@ class ProductImage(Base):
     
     # Информация об изображении
     url = Column(String(500), nullable=False)
-    thumbnail_url = Column(String(500), nullable=True)  # URL миниатюры
+    thumbnail_url = Column(String(500), nullable=True)
     alt_text = Column(String(200), nullable=True)
     caption = Column(String(500), nullable=True)
     
     # Настройки отображения
-    position = Column(Integer, default=0)  # Позиция сортировки
-    is_main = Column(Boolean, default=False)  # Является ли основным
+    position = Column(Integer, default=0) 
+    is_main = Column(Boolean, default=False) 
     
     # Метаданные
-    file_size = Column(Integer, nullable=True)  # Размер файла (байты)
+    file_size = Column(Integer, nullable=True) 
     mime_type = Column(String(50), nullable=True)
-    dimensions = Column(String(50), nullable=True)  # Размеры, например "800x600"
+    dimensions = Column(String(50), nullable=True) 
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
@@ -256,16 +256,16 @@ class ProductVariant(Base):
     product_id = Column(Integer, ForeignKey("products.id"), nullable=False, index=True)
     
     # Информация о варианте
-    name = Column(String(200), nullable=False)  # Название варианта, например "Красный размер M"
+    name = Column(String(200), nullable=False) 
     sku = Column(String(100), nullable=True, unique=True, index=True)
     
     # Цена и запас (переопределяют значения по умолчанию товара)
-    price = Column(Numeric(10, 2), nullable=True)  # Если None, используется цена товара
+    price = Column(Numeric(10, 2), nullable=True) 
     sale_price = Column(Numeric(10, 2), nullable=True)
     stock_quantity = Column(Integer, default=0)
     
     # Комбинация атрибутов
-    attributes = Column(JSON, nullable=False)  # Атрибуты варианта, например {"Цвет": "Красный", "Размер": "M"}
+    attributes = Column(JSON, nullable=False) 
     
     # Другие атрибуты
     weight = Column(Numeric(10, 2), nullable=True)

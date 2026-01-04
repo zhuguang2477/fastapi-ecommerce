@@ -1,13 +1,13 @@
-# backend/app/services/shop_service.py
+# backend/app/services/shop_service.py (保持原样)
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 from typing import List, Optional
 from datetime import datetime
+import logging
 
 from backend.app.models.shop import Shop, ShopMember
 from backend.app.models.user import User
 from backend.app.schemas.shop import ShopCreate
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +16,7 @@ class ShopService:
     @staticmethod
     def create_shop(db: Session, owner_id: int, shop_data: ShopCreate) -> Shop:
         """
-        Создать новый магазин
+        Создать новый магазин (同步版本)
         
         Args:
             db: Сессия базы данных
@@ -54,7 +54,7 @@ class ShopService:
         owner_member = ShopMember(
             shop_id=shop.id,
             user_id=owner_id,
-            role="владелец",
+            is_admin=True,
             is_approved=True
         )
         
@@ -103,7 +103,8 @@ class ShopService:
             shop_id=shop.id,
             user_id=user_id,
             role="наблюдатель",  # Только чтение по умолчанию
-            is_approved=False
+            is_approved=False,
+            is_admin=False
         )
         
         db.add(shop_member)

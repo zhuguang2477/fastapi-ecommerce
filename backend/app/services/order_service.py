@@ -86,9 +86,9 @@ class OrderService:
                 order_items.append(order_item)
             
             # Рассчитываем итоговую сумму (с доставкой, налогами, скидкой)
-            shipping_amount = 0  # Стоимость доставки, можно рассчитать позже
-            tax_amount = subtotal * 0.1  # Налог 10%, пример
-            discount_amount = 0  # Скидка, пример
+            shipping_amount = 0
+            tax_amount = subtotal * 0.1 
+            discount_amount = 0
             total_amount = subtotal + shipping_amount + tax_amount - discount_amount
             
             # Создаем заказ
@@ -111,7 +111,7 @@ class OrderService:
             )
             
             self.db.add(order)
-            self.db.flush()  # Получаем order.id, но не фиксируем транзакцию
+            self.db.flush() 
             
             # Обновляем количество товаров на складе
             for item_data in order_data.items:

@@ -29,7 +29,7 @@ class ImageUploadRequest(BaseModel):
 
 class FileUploadConfig(BaseModel):
     """Конфигурация загрузки файлов"""
-    max_file_size: int = 10 * 1024 * 1024  # 10 МБ
+    max_file_size: int = 10 * 1024 * 1024 
     allowed_extensions: List[str] = ["jpg", "jpeg", "png", "gif", "webp"]
     allowed_mime_types: List[str] = [
         "image/jpeg", 
