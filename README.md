@@ -1,17 +1,17 @@
 # FastAPI Ecommerce Platform
 
-基于FastAPI的电子商务平台后端模块。
+Модуль поддержки платформы электронной коммерции на основе FastAPI.
 
-## 📋 系统要求
+# # 📋  Системные требования
 
 - Python 3.9+
 - PostgreSQL 12+
 - Redis 6+
 - Git
 
-## 🚀 快速开始
+# # 🚀  Быстрый старт.
 
-### 1. 克隆仓库
+# # # 1. Хранилище клонов
 ```bash
 git clone <repository-url>
 cd <project-directory>
