@@ -11,7 +11,7 @@ class SendOTPRequest(BaseModel):
     email: EmailStr = Field(..., description="Электронная почта пользователя")
     
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "email": "user@example.com"
             }
@@ -30,7 +30,7 @@ class ConfirmOTPRequest(BaseModel):
         return v
     
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "email": "user@example.com",
                 "otp_code": "123456"
@@ -53,7 +53,7 @@ class CompleteProfileRequest(BaseModel):
         return v
     
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "first_name": "Иван",
                 "last_name": "Иванов",
@@ -68,7 +68,7 @@ class LoginRequest(BaseModel):
     password: str
     
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "email": "user@example.com",
                 "password": "securepassword123"
@@ -100,7 +100,7 @@ class RegisterRequest(BaseModel):
         return v
     
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "email": "user@example.com",
                 "password": "securepassword123",

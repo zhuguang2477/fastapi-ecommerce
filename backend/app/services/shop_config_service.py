@@ -11,7 +11,7 @@ from backend.app.models.shop_settings import ShopSettings
 from backend.app.models.shop_design import ShopDesign
 from backend.app.models.shop import Shop
 from backend.app.schemas.shop_settings import ShopSettingsUpdate
-from backend.app.schemas.shop_design import ShopDesignUpdate
+from backend.app.schemas.design import ShopDesignUpdate
 
 logger = logging.getLogger(__name__)
 
