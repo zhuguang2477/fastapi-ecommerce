@@ -1,43 +1,100 @@
-import os
-from typing import List
+# backend/app/core/config.py
+from typing import List, Optional, Union, Dict, Any
+from pydantic import Field, validator
 from pydantic_settings import BaseSettings
-from dotenv import load_dotenv
+import secrets
+from datetime import timedelta
 
-load_dotenv()
 
 class Settings(BaseSettings):
-    # Конфигурация проекта
-    PROJECT_NAME: str = os.getenv("PROJECT_NAME", "FastAPI Ecommerce Platform")
-    VERSION: str = os.getenv("VERSION", "1.0.0")
-    DEBUG: bool = os.getenv("DEBUG", "False").lower() == "true"
-    SECRET_KEY: str = os.getenv("SECRET_KEY", "your-secret-key")
-    API_V1_STR: str = os.getenv("API_V1_STR", "/api/v1")
+    # 项目配置
+    PROJECT_NAME: str = "FastAPI Платформа электронной коммерции"
+    APP_NAME: str = Field(default="FastAPI Платформа электронной коммерции")
+    VERSION: str = "1.0.0"
+    API_V1_STR: str = "/api/v1"
+    DEBUG: bool = False
     
-    # Настройка базы данных - построение URL - адресов из независимых параметров
-    POSTGRES_SERVER: str = os.getenv("POSTGRES_SERVER", "localhost")
-    POSTGRES_USER: str = os.getenv("POSTGRES_USER", "postgres")
-    POSTGRES_PASSWORD: str = os.getenv("POSTGRES_PASSWORD", "password")
-    POSTGRES_DB: str = os.getenv("POSTGRES_DB", "ecommerce_db")
-    POSTGRES_PORT: str = os.getenv("POSTGRES_PORT", "5432")
+    # 服务器配置
+    HOST: str = "0.0.0.0"
+    PORT: int = 8000
+    BACKEND_CORS_ORIGINS: List[str] = ["*"]
     
-    # Создать полный URL базы данных
-    @property
-    def DATABASE_URL(self) -> str:
-        return f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+    # 安全配置
+    SECRET_KEY: str = Field(default_factory=lambda: secrets.token_urlsafe(32))
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7
     
-    # Настройка Redis
-    REDIS_HOST: str = os.getenv("REDIS_HOST", "localhost")
-    REDIS_PORT: str = os.getenv("REDIS_PORT", "6379")
+    # 数据库配置
+    DATABASE_URL: str = "sqlite:///./ecommerce.db"
+    DATABASE_POOL_SIZE: int = 5
+    DATABASE_MAX_OVERFLOW: int = 10
     
-    # Создание полного URL - адреса Redis
-    @property
-    def REDIS_URL(self) -> str:
-        return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/0"
+    # Redis配置
+    REDIS_URL: str = "redis://localhost:6379"
+    REDIS_PASSWORD: Optional[str] = None
+    REDIS_DB: int = 0
     
-    # Настройка JWT
-    JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "your-jwt-secret-key")
+    # 邮件配置
+    SMTP_HOST: Optional[str] = None
+    SMTP_PORT: Optional[int] = 587
+    SMTP_USER: Optional[str] = None
+    SMTP_PASSWORD: Optional[str] = None
+    EMAILS_FROM_EMAIL: Optional[str] = None
+    EMAILS_FROM_NAME: Optional[str] = None
     
-    # Настройка CORS
-    ALLOWED_ORIGINS: List[str] = eval(os.getenv("ALLOWED_ORIGINS", '["http://localhost:3000"]'))
+    # 文件上传配置
+    UPLOAD_DIR: str = "./uploads"
+    MAX_UPLOAD_SIZE: int = 10 * 1024 * 1024
+    ALLOWED_IMAGE_TYPES: List[str] = ["image/jpeg", "image/png", "image/webp"]
+    
+    # 缓存配置
+    CACHE_TTL: int = 300
+    
+    # 验证码配置
+    OTP_EXPIRE_MINUTES: int = 10
+    OTP_LENGTH: int = 6
+    
+    # 店铺配置
+    DEFAULT_SHOP_PASSWORD_LENGTH: int = 8
+    MAX_SHOP_MEMBERS: int = 10
+    
+    # 模型配置
+    model_config = {
+        "env_file": ".env",
+        "case_sensitive": False
+    }
+    
+    @validator("BACKEND_CORS_ORIGINS", pre=True)
+    def assemble_cors_origins(cls, v: Union[str, List[str]]) -> Union[List[str], str]:
+        if isinstance(v, str) and not v.startswith("["):
+            return [i.strip() for i in v.split(",")]
+        elif isinstance(v, (list, str)):
+            return v
+        raise ValueError(v)
+    
+    @validator("DATABASE_URL")
+    def validate_database_url(cls, v: str) -> str:
+        if not v:
+            raise ValueError("DATABASE_URL не может быть пустым")
+        return v
+    
+    @validator("SECRET_KEY")
+    def validate_secret_key(cls, v: str) -> str:
+        if len(v) < 32:
+            raise ValueError("Длина SECRET_KEY должна быть не менее 32 символов")
+        return v
 
+
+# 创建配置实例
 settings = Settings()
+
+# 提供向后兼容的别名
+class Config:
+    """Класс конфигурации для обратной совместимости"""
+    def __init__(self):
+        self.settings = settings
+    
+    def __getattr__(self, name):
+        return getattr(self.settings, name)
+
+config = Config()
