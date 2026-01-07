@@ -90,6 +90,67 @@ class OTPService:
             return None
     
     @staticmethod
+    def mark_otp_used(otp_id: int, db: Session) -> bool:
+        """Пометить OTP как использованный по ID"""
+        try:
+            otp_record = db.query(OTP).filter(OTP.id == otp_id).first()
+            if not otp_record:
+                logger.error(f"OTP с ID {otp_id} не найден")
+                return False
+            
+            otp_record.is_used = True
+            otp_record.used_at = datetime.utcnow()
+            db.commit()
+            logger.info(f"OTP {otp_id} отмечен как использованный для {otp_record.email}")
+            return True
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Ошибка при отметке OTP {otp_id} как использованного: {e}")
+            return False
+    
+    @staticmethod
+    def mark_otp_used_by_record(otp_record: OTP, db: Session) -> bool:
+        """Пометить OTP как использованный (по объекту OTP)"""
+        try:
+            otp_record.is_used = True
+            otp_record.used_at = datetime.utcnow()
+            db.commit()
+            logger.info(f"OTP {otp_record.id} отмечен как использованный для {otp_record.email}")
+            return True
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Ошибка при отметке OTP как использованного: {e}")
+            return False
+    
+    @staticmethod
+    def get_last_otp(email: str, db: Session) -> OTP:
+        """Получить последний отправленный OTP для email"""
+        try:
+            otp_record = db.query(OTP).filter(
+                OTP.email == email
+            ).order_by(OTP.created_at.desc()).first()
+            return otp_record
+        except Exception as e:
+            logger.error(f"Ошибка получения последнего OTP для {email}: {e}")
+            return None
+    
+    @staticmethod
+    def clean_expired_otps(db: Session, hours: int = 24) -> int:
+        """Очистить истекшие OTP записи"""
+        try:
+            cutoff_time = datetime.utcnow() - timedelta(hours=hours)
+            expired_count = db.query(OTP).filter(
+                OTP.created_at < cutoff_time
+            ).delete()
+            db.commit()
+            logger.info(f"Удалено {expired_count} истекших OTP записей")
+            return expired_count
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Ошибка при очистке истекших OTP: {e}")
+            return 0
+    
+    @staticmethod
     async def send_otp_email(email: str, ip_address: str, db: Session) -> bool:
         """Отправить OTP по электронной почте, включает запись безопасности"""
         try:

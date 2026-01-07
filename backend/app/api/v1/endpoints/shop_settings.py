@@ -6,7 +6,9 @@ import logging
 
 from backend.app.database import get_db
 from backend.app.core.security import get_current_user
-from backend.app.schemas.shop_settings import ShopSettingsResponse, ShopSettingsUpdate
+from backend.app.schemas.shop_settings import (
+    ShopSettingsResponse, ShopSettingsUpdate, ShopSettingsCreate, ShopSettingsDefault
+)
 from backend.app.services.shop_settings_service import SettingsService
 
 router = APIRouter()
@@ -19,22 +21,34 @@ async def get_shop_settings(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
-    """Получить настройки магазина"""
+    """获取店铺设置"""
     try:
         settings_service = SettingsService(db)
-        settings = settings_service.get_settings(shop_id)
+        settings = settings_service.get_shop_settings(shop_id)
         
         if not settings:
-            # Если настройки не существуют, вернуть значения по умолчанию
-            settings = settings_service.create_or_update_settings(
+            # 如果设置不存在，返回空设置
+            from backend.app.schemas.shop_settings import ShopSettingsDefault
+            default_settings = ShopSettingsDefault()
+            
+            # 创建默认设置
+            create_data = {
+                "shop_id": shop_id,
+                **default_settings.dict()
+            }
+            settings = settings_service.create_shop_settings(
                 shop_id, 
-                ShopSettingsUpdate()
+                ShopSettingsCreate(**create_data)
             )
         
-        return settings
+        # 转换为响应模型
+        return settings_service.to_response(settings)
     except Exception as e:
-        logger.error(f"Ошибка получения настроек магазина: {e}")
-        raise HTTPException(status_code=500, detail="Не удалось получить настройки магазина")
+        logger.error(f"获取店铺设置错误: {e}")
+        raise HTTPException(
+            status_code=500, 
+            detail=f"获取店铺设置失败: {str(e)}"
+        )
 
 @router.put("/shops/{shop_id}/settings", response_model=ShopSettingsResponse)
 async def update_shop_settings(
@@ -46,7 +60,7 @@ async def update_shop_settings(
     """Обновить настройки магазина"""
     try:
         settings_service = SettingsService(db)
-        settings = settings_service.create_or_update_settings(shop_id, settings_data)
+        settings = settings_service.update_shop_settings(shop_id, settings_data)
         return settings
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

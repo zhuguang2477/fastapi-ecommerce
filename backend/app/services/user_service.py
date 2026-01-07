@@ -41,7 +41,9 @@ class UserService:
         email: str,
         is_verified: bool = False,
         otp_enabled: bool = False,
-        otp_verified: bool = False
+        otp_verified: bool = False,
+        registration_ip: Optional[str] = None,
+        **kwargs  # 接收其他可选参数
     ) -> Optional[User]:
         """Создать или обновить пользователя"""
         try:
@@ -61,7 +63,9 @@ class UserService:
                     is_verified=is_verified,
                     otp_enabled=otp_enabled,
                     otp_verified=otp_verified,
-                    is_active=True
+                    is_active=True,
+                    registration_ip=registration_ip,
+                    login_count=0  # 初始化登录次数
                 )
                 db.add(user)
             
@@ -78,6 +82,15 @@ class UserService:
         except Exception as e:
             logger.error(f"Ошибка создания/обновления пользователя: {e}")
             db.rollback()
+            return None
+        
+    @staticmethod
+    def get_user_by_phone(db: Session, phone: str) -> Optional[User]:
+        """Получить пользователя по телефону"""
+        try:
+            return db.query(User).filter(User.phone == phone).first()
+        except Exception as e:
+            logger.error(f"Ошибка получения пользователя по телефону: {e}")
             return None
     
     @staticmethod
@@ -190,5 +203,35 @@ class UserService:
             
         except Exception as e:
             logger.error(f"Ошибка активации пользователя: {e}")
+            db.rollback()
+            return False
+        
+    @staticmethod
+    def record_login_activity(
+        db: Session,
+        user_id: int,
+        ip_address: str,
+        user_agent: Optional[str] = None,
+        login_method: str = "otp"
+    ) -> bool:
+        """记录用户登录活动（简化版）"""
+        try:
+            user = db.query(User).filter(User.id == user_id).first()
+            if not user:
+                logger.warning(f"用户不存在: {user_id}")
+                return False
+            
+            # 只更新用户表中的信息
+            user.last_login_at = datetime.now()
+            user.last_login_ip = ip_address
+            user.login_count = (user.login_count or 0) + 1
+            
+            db.commit()
+            
+            logger.info(f"用户登录记录: {user.email}, IP: {ip_address}, 方法: {login_method}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"记录登录活动失败: {e}")
             db.rollback()
             return False

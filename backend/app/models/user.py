@@ -1,7 +1,7 @@
 """
 用户模型
 """
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, JSON
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from backend.app.database import Base
@@ -29,10 +29,19 @@ class User(Base):
     avatar_url = Column(String(500), nullable=True)
     bio = Column(Text, nullable=True)
     
+    # 登录活动字段 - 添加这些字段
+    login_count = Column(Integer, default=0)
+    last_login_ip = Column(String(45), nullable=True)  # IPv4或IPv6
+    registration_ip = Column(String(45), nullable=True)
+    
+    # 元数据
+    preferences = Column(JSON, default={})  # 用户偏好设置
+    
     # 时间戳
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
     last_login_at = Column(DateTime, nullable=True)
+    profile_completed_at = Column(DateTime, nullable=True)
 
     # 关系定义
     owned_shops = relationship(

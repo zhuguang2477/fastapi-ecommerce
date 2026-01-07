@@ -65,19 +65,47 @@ class ProductBase(BaseModel):
     """Базовая информация о товаре"""
     name: str = Field(..., min_length=1, max_length=200, description="Название товара")
     description: Optional[str] = Field(None, description="Описание товара")
+    short_description: Optional[str] = Field(None, max_length=500, description="Краткое описание")
     price: float = Field(..., gt=0, description="Цена")
-    original_price: Optional[float] = Field(None, gt=0, description="Исходная цена")
+    compare_at_price: Optional[float] = Field(None, gt=0, description="Цена для сравнения")
+    cost_price: Optional[float] = Field(None, gt=0, description="Себестоимость")
+    sale_price: Optional[float] = Field(None, gt=0, description="Цена со скидкой")
+    
     category_id: Optional[int] = Field(None, description="ID категории")
     stock_quantity: int = Field(default=0, ge=0, description="Количество на складе")
     sku: Optional[str] = Field(None, max_length=50, description="SKU код")
+    barcode: Optional[str] = Field(None, max_length=100, description="Штрих-код")
     
-    # Теги и атрибуты
-    tags: List[str] = Field(default_factory=list, description="Список тегов")
-    attributes: Dict[str, Any] = Field(default_factory=dict, description="Атрибуты товара")
+    # Статусы
+    status: Optional[str] = Field("pending", description="Статус товара")
+    is_featured: bool = Field(False, description="Рекомендуемый товар")
+    is_virtual: bool = Field(False, description="Виртуальный товар")
+    requires_shipping: bool = Field(True, description="Требуется доставка")
+    
+    # Управление запасами
+    low_stock_threshold: int = Field(default=5, ge=0, description="Порог низкого запаса")
+    manage_stock: bool = Field(True, description="Управлять запасами")
+    allow_backorders: bool = Field(False, description="Разрешить предзаказы")
+    
+    # Физические характеристики
+    weight: Optional[float] = Field(None, ge=0, description="Вес")
+    weight_unit: str = Field("kg", description="Единица веса")
+    length: Optional[float] = Field(None, ge=0, description="Длина")
+    width: Optional[float] = Field(None, ge=0, description="Ширина")
+    height: Optional[float] = Field(None, ge=0, description="Высота")
+    dimensions_unit: str = Field("cm", description="Единица размеров")
     
     # SEO информация
     meta_title: Optional[str] = Field(None, max_length=200, description="Meta заголовок")
     meta_description: Optional[str] = Field(None, description="Meta описание")
+    meta_keywords: Optional[str] = Field(None, max_length=500, description="Ключевые слова")
+    
+    # Теги и атрибуты
+    tags: Optional[List[str]] = Field(default_factory=list, description="Список тегов")
+    attributes: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Атрибуты товара")
+    
+    # Дата публикации
+    published_at: Optional[datetime] = Field(None, description="Дата публикации")
     
     @validator('price')
     def validate_price(cls, v):
@@ -86,20 +114,10 @@ class ProductBase(BaseModel):
             raise ValueError('Цена должна быть больше 0')
         return round(v, 2)
     
-    @validator('original_price')
-    def validate_original_price(cls, v, values):
-        """Проверка исходной цены"""
-        if v is not None:
-            if 'price' in values and v <= values['price']:
-                raise ValueError('Исходная цена должна быть больше текущей цены')
-            return round(v, 2)
-        return v
-    
     @validator('sku')
     def validate_sku(cls, v):
         """Проверка SKU"""
         if v:
-            # SKU должен содержать только буквы, цифры и дефисы
             import re
             if not re.match(r'^[A-Za-z0-9\-_]+$', v):
                 raise ValueError('SKU может содержать только буквы, цифры, дефисы и подчеркивания')
@@ -108,25 +126,15 @@ class ProductBase(BaseModel):
 
 class ProductCreate(ProductBase):
     """Создание товара"""
-    status: ProductStatus = Field(ProductStatus.DRAFT, description="Статус товара")
-    is_featured: bool = Field(False, description="Рекомендуемый товар")
-    is_new: bool = Field(True, description="Новый товар")
-    weight: Optional[float] = Field(None, ge=0, description="Вес (кг)")
-    dimensions: Optional[Dict[str, float]] = Field(
-        None, 
-        description="Размеры: {длина, ширина, высота} в см"
-    )
+    # 添加slug字段
+    slug: Optional[str] = Field(None, max_length=200, description="URL slug")
     
-    @validator('dimensions')
-    def validate_dimensions(cls, v):
-        """Проверка размеров"""
-        if v:
-            required_keys = ['length', 'width', 'height']
-            for key in required_keys:
-                if key not in v:
-                    raise ValueError(f'Размеры должны содержать ключ: {key}')
-                if v[key] <= 0:
-                    raise ValueError(f'Значение {key} должно быть больше 0')
+    @validator('slug')
+    def generate_slug(cls, v, values):
+        """Генерация slug из названия"""
+        if v is None and 'name' in values:
+            from slugify import slugify
+            return slugify(values['name'])
         return v
 
 
@@ -134,35 +142,45 @@ class ProductUpdate(BaseModel):
     """Обновление товара"""
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
+    short_description: Optional[str] = Field(None, max_length=500)
     price: Optional[float] = Field(None, gt=0)
-    original_price: Optional[float] = Field(None, gt=0)
+    compare_at_price: Optional[float] = Field(None, gt=0)
+    cost_price: Optional[float] = Field(None, gt=0)
+    sale_price: Optional[float] = Field(None, gt=0)
     category_id: Optional[int] = None
     stock_quantity: Optional[int] = Field(None, ge=0)
     sku: Optional[str] = Field(None, max_length=50)
-    status: Optional[ProductStatus] = None
+    barcode: Optional[str] = Field(None, max_length=100)
+    status: Optional[str] = None
     is_featured: Optional[bool] = None
-    is_new: Optional[bool] = None
-    tags: Optional[List[str]] = None
-    attributes: Optional[Dict[str, Any]] = None
+    is_virtual: Optional[bool] = None
+    requires_shipping: Optional[bool] = None
+    low_stock_threshold: Optional[int] = Field(None, ge=0)
+    manage_stock: Optional[bool] = None
+    allow_backorders: Optional[bool] = None
+    weight: Optional[float] = Field(None, ge=0)
+    weight_unit: Optional[str] = None
+    length: Optional[float] = Field(None, ge=0)
+    width: Optional[float] = Field(None, ge=0)
+    height: Optional[float] = Field(None, ge=0)
+    dimensions_unit: Optional[str] = None
     meta_title: Optional[str] = Field(None, max_length=200)
     meta_description: Optional[str] = None
-    weight: Optional[float] = Field(None, ge=0)
-    dimensions: Optional[Dict[str, float]] = None
+    meta_keywords: Optional[str] = Field(None, max_length=500)
+    tags: Optional[List[str]] = None
+    attributes: Optional[Dict[str, Any]] = None
+    published_at: Optional[datetime] = None
+    slug: Optional[str] = Field(None, max_length=200)
 
 
 class ProductInDB(ProductBase):
     """Информация о товаре в базе данных"""
     id: int = Field(..., description="ID товара")
     shop_id: int = Field(..., description="ID магазина")
-    status: ProductStatus = Field(..., description="Статус товара")
-    is_featured: bool = Field(..., description="Рекомендуемый товар")
-    is_new: bool = Field(..., description="Новый товар")
     created_at: datetime = Field(..., description="Дата создания")
-    updated_at: datetime = Field(..., description="Дата обновления")
-    images: List[ProductImageInDB] = Field(default_factory=list, description="Изображения")
+    updated_at: Optional[datetime] = Field(None, description="Дата обновления")
+    images: List[Any] = Field(default_factory=list, description="Изображения")
     category_name: Optional[str] = Field(None, description="Название категории")
-    weight: Optional[float] = Field(None, description="Вес (кг)")
-    dimensions: Optional[Dict[str, float]] = Field(None, description="Размеры")
     
     class Config:
         from_attributes = True
@@ -234,9 +252,8 @@ class ProductSearch(BaseModel):
     category_id: Optional[int] = Field(None, description="ID категории")
     min_price: Optional[float] = Field(None, ge=0, description="Минимальная цена")
     max_price: Optional[float] = Field(None, ge=0, description="Максимальная цена")
-    status: Optional[ProductStatus] = Field(None, description="Статус товара")
+    status: Optional[str] = Field(None, description="Статус товара")
     is_featured: Optional[bool] = Field(None, description="Рекомендуемый товар")
-    is_new: Optional[bool] = Field(None, description="Новый товар")
     tags: Optional[List[str]] = Field(None, description="Теги")
     in_stock: Optional[bool] = Field(None, description="В наличии")
     min_discount: Optional[int] = Field(None, ge=0, le=100, description="Минимальная скидка (%)")

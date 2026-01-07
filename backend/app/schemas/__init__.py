@@ -49,8 +49,7 @@ from backend.app.schemas.customer import (
 )
 # 店铺设置模式
 from backend.app.schemas.shop_settings import (
-    ShopSettingsBase, ShopSettingsCreate, ShopSettingsUpdate, ShopSettingsResponse,
-    SocialLinks
+    ShopSettingsBase, ShopSettingsCreate, ShopSettingsUpdate, ShopSettingsResponse
 )
 # 店铺设计模式
 from backend.app.schemas.shop_design import (

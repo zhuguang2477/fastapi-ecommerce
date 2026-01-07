@@ -31,17 +31,34 @@ class ProductService:
                 if not category:
                     raise ValueError(f"Категория не найдена: {product_data.category_id}")
             
+            # 过滤掉模型中没有的字段
+            # 先获取模型的所有列名
+            from backend.app.models.product import Product as ProductModel
+            model_columns = {column.name for column in ProductModel.__table__.columns}
+            
+            # 过滤数据
+            product_dict = product_data.dict(exclude_unset=True)
+            filtered_data = {}
+            
+            for key, value in product_dict.items():
+                if key in model_columns:
+                    filtered_data[key] = value
+                else:
+                    logger.warning(f"Пропущено поле {key}, которого нет в модели Product")
+            
+            # 添加shop_id
+            filtered_data['shop_id'] = shop_id
+            
+            # 确保slug存在
+            if 'slug' not in filtered_data and 'name' in filtered_data:
+                from slugify import slugify
+                filtered_data['slug'] = slugify(filtered_data['name'])
+            
             # Создание товара
-            product = Product(
-                shop_id=shop_id,
-                **product_data.dict(exclude={'images'})
-            )
+            product = Product(**filtered_data)
             
             self.db.add(product)
-            self.db.flush()  # Получение product.id
-            
-            # Если есть данные изображений, их можно добавить здесь
-            # Изображения обычно загружаются через отдельный API
+            self.db.flush()
             
             self.db.commit()
             self.db.refresh(product)
@@ -549,13 +566,12 @@ def duplicate_product(
             name=new_name or f"{original.name} - Копия",
             description=original.description,
             price=original.price,
-            original_price=original.original_price,
             category_id=original.category_id,
             stock_quantity=0,  # У нового товара запас 0
             sku=f"{original.sku}_КОПИЯ" if original.sku else None,
-            status=ProductStatus.PENDING,  # Дублированный товар помечается как ожидающий
-            is_featured=False,  # Дублированный товар не помечается как рекомендуемый
-            is_new=True,  # Дублированный товар помечается как новый
+            status=ProductStatus.PENDING,
+            is_featured=False,
+            is_new=True,
             tags=original.tags.copy() if original.tags else [],
             attributes=original.attributes.copy() if original.attributes else {},
             meta_title=original.meta_title,

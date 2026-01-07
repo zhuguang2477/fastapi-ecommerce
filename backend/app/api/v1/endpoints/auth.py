@@ -162,18 +162,19 @@ async def confirm_otp(
                 db=db,
                 user_id=user.id,
                 is_verified=True,
-                otp_verified=True,
-                last_login_ip=ip_address,
-                last_login_at=datetime.utcnow()
+                otp_verified=True
             )
             
             logger.info(f"Пользователь вошел через OTP: {user.email} (ID: {user.id})")
         
         # 5. Пометить OTP как использованный
-        OTPService.mark_otp_used(otp_record.id, db)
+        user.last_login_ip = ip_address
+        user.last_login_at = datetime.utcnow()
+        db.commit()
+        db.refresh(user)
         
         # 6. Запись активности входа
-        await UserService.record_login_activity(
+        UserService.record_login_activity(
             db=db,
             user_id=user.id,
             ip_address=ip_address,
@@ -234,7 +235,7 @@ async def confirm_otp(
         return TokenResponse(
             access_token=access_token,
             token_type="bearer",
-            user=user_response,
+            user=user_response.dict(),
             user_id=user.id,
             email=user.email,
             is_profile_completed=user.is_profile_completed,

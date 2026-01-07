@@ -18,8 +18,8 @@ class ShopSettings(Base):
     shop_id = Column(Integer, ForeignKey("shops.id"), nullable=False, index=True)
     
     # 基本店铺信息
-    store_name = Column(String(200), nullable=False)
-    store_email = Column(String(255), nullable=False)
+    store_name = Column(String(200), nullable=True)
+    store_email = Column(String(255), nullable=True)
     store_phone = Column(String(50), nullable=True)
 
     # 地区和语言设置

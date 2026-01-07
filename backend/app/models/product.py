@@ -77,6 +77,8 @@ class Product(Base):
     wishlist_count = Column(Integer, default=0)
     average_rating = Column(Numeric(3, 2), default=0) 
     review_count = Column(Integer, default=0)
+
+    original_price = Column(Numeric(10, 2), nullable=True)
     
     # Временная информация
     published_at = Column(DateTime(timezone=True), nullable=True)
