@@ -10,7 +10,7 @@ import uvicorn
 from datetime import datetime
 
 from backend.app.core.config import settings
-from backend.app.database import init_db, get_db
+from backend.app.database import get_db
 from backend.app.api.v1.api import api_router
 from backend.app.core.security import security
 
@@ -46,14 +46,6 @@ if settings.BACKEND_CORS_ORIGINS:
 async def startup_event():
     """Событие запуска"""
     logger.info("Запуск приложения FastAPI...")
-    
-    # Инициализация базы данных
-    try:
-        init_db()
-        logger.info("Инициализация базы данных завершена")
-    except Exception as e:
-        logger.error(f"Ошибка инициализации базы данных: {e}")
-        raise
     
     # Проверка ключевых конфигураций
     if settings.SMTP_PASSWORD in ['your-app-password', 'test123', '']:
