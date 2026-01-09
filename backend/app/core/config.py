@@ -4,7 +4,9 @@ from pydantic import Field, validator
 from pydantic_settings import BaseSettings
 import secrets
 from datetime import timedelta
+from pathlib import Path
 
+BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
 
 class Settings(BaseSettings):
     # 项目配置
@@ -24,8 +26,8 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7
     
-    # 数据库配置
-    DATABASE_URL: str = "sqlite:///./ecommerce.db"
+    # 数据库配置 - 移除默认值，强制从.env文件读取
+    DATABASE_URL: str = Field(...)
     DATABASE_POOL_SIZE: int = 5
     DATABASE_MAX_OVERFLOW: int = 10
     
@@ -58,9 +60,9 @@ class Settings(BaseSettings):
     DEFAULT_SHOP_PASSWORD_LENGTH: int = 8
     MAX_SHOP_MEMBERS: int = 10
     
-    # 模型配置
+    # 模型配置 - 修正.env文件路径
     model_config = {
-        "env_file": ".env",
+        "env_file": str(BASE_DIR / ".env"),
         "case_sensitive": False
     }
     
@@ -85,8 +87,14 @@ class Settings(BaseSettings):
         return v
 
 
-# 创建配置实例
-settings = Settings()
+try:
+    settings = Settings()
+except Exception as e:
+    print(f"❌ 配置文件加载失败: {e}")
+    print(f"请确保存在 .env 文件，并且包含必要的配置项")
+    print(f"配置文件路径: {BASE_DIR / '.env'}")
+    print(f"必需的配置项: DATABASE_URL, SECRET_KEY")
+    raise
 
 # 提供向后兼容的别名
 class Config:
